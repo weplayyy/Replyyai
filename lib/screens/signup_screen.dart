@@ -24,8 +24,7 @@ class _SignupScreenState extends State<SignupScreen> {
     }
     setState(() => _loading = true);
     try {
-      final cred = await _auth.signUpWithEmail(_emailC.text.trim(), _passC.text);
-      await cred.user?.updateDisplayName(_nameC.text.trim());
+      await _auth.signUpWithEmail(_emailC.text.trim(), _passC.text, _nameC.text.trim());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
