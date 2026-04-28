@@ -7,31 +7,25 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:813236599127:android:baf01c895e60df2fa1a612",
-        "android_client_info": {
-          "package_name": "com.app.wechat"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyDi3bwqGOmiH_2P9seicqp9n_ZXDWymKd0"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
         "mobilesdk_app_id": "1:813236599127:android:1fccdea8474d4b89a1a612",
         "android_client_info": {
           "package_name": "com.weplayy.flutterapp"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "813236599127-rmiiumoebfg3unvmbgsf8miu1tafnrq4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.weplayy.flutterapp",
+            "certificate_hash": "c87b8043d49d2f7f0224ea8078336e329e245a48"
+          }
+        },
+        {
+          "client_id": "813236599127-m7pun9rtp7n27gb3udgmunhrrgqdo5ln.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDi3bwqGOmiH_2P9seicqp9n_ZXDWymKd0"
@@ -39,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "813236599127-m7pun9rtp7n27gb3udgmunhrrgqdo5ln.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
