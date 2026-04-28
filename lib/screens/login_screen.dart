@@ -9,147 +9,223 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _auth = AuthService();
   final _emailC = TextEditingController();
   final _passC = TextEditingController();
-  final _auth = AuthService();
-  bool _loading = false;
-  bool _obscure = true;
+  bool _busy = false;
+  bool _showEmail = false;
 
-  Future<void> _login() async {
-    if (_emailC.text.isEmpty || _passC.text.isEmpty) {
-      _showSnack('Please fill in both fields');
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      await _auth.signInWithEmail(_emailC.text.trim(), _passC.text);
-    } catch (e) {
-      _showSnack('Login failed: ${e.toString()}');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _google() async {
-    setState(() => _loading = true);
+  Future<void> _signInGoogle() async {
+    setState(() => _busy = true);
     try {
       await _auth.signInWithGoogle();
     } catch (e) {
-      _showSnack('Google sign-in failed: ${e.toString()}');
+      _err(e);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  Future<void> _signInEmail() async {
+    if (_emailC.text.trim().isEmpty || _passC.text.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await _auth.signInWithEmail(_emailC.text.trim(), _passC.text);
+    } catch (e) {
+      _err(e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _err(Object e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: const Color(0xFFEF4444)),
+    );
+  }
+
+  @override
+  void dispose() {
+    _emailC.dispose();
+    _passC.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1A0B2E), Color(0xFF0F0A1F), Color(0xFF2D0F3D)],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
+      backgroundColor: const Color(0xFF0A0717),
+      body: Stack(
+        children: [
+          const _AuthBackground(),
+          SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFEC4899).withOpacity(0.5),
-                          blurRadius: 40,
-                          spreadRadius: 4,
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    minHeight: MediaQuery.of(context).size.height -
+                        MediaQuery.of(context).padding.vertical),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 30),
+                    _logo(),
+                    const SizedBox(height: 16),
+                    _brandText(),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Talk more. Connect deeper.\nBe you, with ',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 15,
+                          height: 1.5),
+                    ),
+                    const SizedBox(height: 36),
+                    _googleButton(),
+                    const SizedBox(height: 14),
+                    if (!_showEmail)
+                      TextButton(
+                        onPressed: () => setState(() => _showEmail = true),
+                        child: Text('Use email instead',
+                            style: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 14)),
+                      ),
+                    if (_showEmail) ...[
+                      const SizedBox(height: 6),
+                      _glassField(
+                          controller: _emailC,
+                          hint: 'Email',
+                          icon: Icons.alternate_email_rounded),
+                      const SizedBox(height: 12),
+                      _glassField(
+                          controller: _passC,
+                          hint: 'Password',
+                          icon: Icons.lock_outline_rounded,
+                          obscure: true),
+                      const SizedBox(height: 18),
+                      _gradientButton(
+                          label: 'Sign In',
+                          icon: Icons.arrow_forward_rounded,
+                          onTap: _busy ? null : _signInEmail),
+                    ],
+                    const SizedBox(height: 22),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("New here? ",
+                            style: TextStyle(
+                                color: Colors.white.withOpacity(0.6))),
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const SignupScreen())),
+                          child: ShaderMask(
+                            shaderCallback: (b) => const LinearGradient(
+                                    colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)])
+                                .createShader(b),
+                            child: const Text(
+                              'Create account',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(28),
-                      child: Image.asset('assets/logo.png', fit: BoxFit.cover),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  const Text(
-                    'Welcome back',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Sign in to continue chatting',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  _glassField(controller: _emailC, hint: 'Email', icon: Icons.email_outlined),
-                  const SizedBox(height: 14),
-                  _glassField(
-                    controller: _passC,
-                    hint: 'Password',
-                    icon: Icons.lock_outline,
-                    obscure: _obscure,
-                    suffix: IconButton(
-                      icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility,
-                          color: Colors.white54),
-                      onPressed: () => setState(() => _obscure = !_obscure),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  _gradientButton(text: 'Sign In', onPressed: _login),
-                  const SizedBox(height: 22),
-                  Row(children: [
-                    Expanded(child: Divider(color: Colors.white.withOpacity(0.15))),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('or continue with',
-                          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
-                    ),
-                    Expanded(child: Divider(color: Colors.white.withOpacity(0.15))),
-                  ]),
-                  const SizedBox(height: 22),
-                  _googleButton(_google),
-                  const SizedBox(height: 28),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text("Don't have an account? ",
-                          style: TextStyle(color: Colors.white.withOpacity(0.6))),
-                      GestureDetector(
-                        onTap: () => Navigator.push(context,
-                            MaterialPageRoute(builder: (_) => const SignupScreen())),
-                        child: const Text('Sign Up',
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.lock_rounded,
+                            size: 12, color: Colors.white.withOpacity(0.4)),
+                        const SizedBox(width: 5),
+                        Text('Safe, secure & private',
                             style: TextStyle(
-                                color: Color(0xFFEC4899), fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                ],
+                                color: Colors.white.withOpacity(0.4),
+                                fontSize: 12)),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                  ],
+                ),
               ),
             ),
           ),
+          if (_busy)
+            Container(
+              color: Colors.black.withOpacity(0.4),
+              alignment: Alignment.center,
+              child: const CircularProgressIndicator(color: Color(0xFFEC4899)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _logo() {
+    return Container(
+      width: 130,
+      height: 130,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+              color: const Color(0xFF8B5CF6).withOpacity(0.55),
+              blurRadius: 60,
+              spreadRadius: 6),
+          BoxShadow(
+              color: const Color(0xFFEC4899).withOpacity(0.4),
+              blurRadius: 80,
+              spreadRadius: 2),
+        ],
+      ),
+      child: Image.asset('assets/wechat_logo.png', fit: BoxFit.contain),
+    );
+  }
+
+  Widget _brandText() {
+    return ShaderMask(
+      shaderCallback: (b) => const LinearGradient(
+        colors: [Colors.white, Color(0xFFB794F6), Color(0xFFEC4899)],
+      ).createShader(b),
+      child: const Text(
+        'WeChat',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 50,
+          fontWeight: FontWeight.bold,
+          fontStyle: FontStyle.italic,
+          letterSpacing: -1,
         ),
+      ),
+    );
+  }
+
+  Widget _googleButton() {
+    return _PillButton(
+      onTap: _busy ? null : _signInGoogle,
+      color: Colors.white,
+      shadow: Colors.white.withOpacity(0.2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          _GoogleG(),
+          SizedBox(width: 12),
+          Text(
+            'Continue with Google',
+            style: TextStyle(
+                color: Color(0xFF1F2937),
+                fontWeight: FontWeight.bold,
+                fontSize: 16),
+          ),
+        ],
       ),
     );
   }
@@ -159,110 +235,203 @@ class _LoginScreenState extends State<LoginScreen> {
     required String hint,
     required IconData icon,
     bool obscure = false,
-    Widget? suffix,
   }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.06),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
       child: TextField(
         controller: controller,
         obscureText: obscure,
         style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
+          prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.5), size: 20),
           hintText: hint,
           hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-          prefixIcon: Icon(icon, color: Colors.white54),
-          suffixIcon: suffix,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+          contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),
       ),
     );
   }
 
-  Widget _gradientButton({required String text, required VoidCallback onPressed}) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFEC4899).withOpacity(0.4),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
+  Widget _gradientButton({
+    required String label,
+    required IconData icon,
+    VoidCallback? onTap,
+  }) {
+    return _PillButton(
+      onTap: onTap,
+      gradient: const LinearGradient(
+          colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
+      shadow: const Color(0xFFEC4899).withOpacity(0.45),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16)),
+          const SizedBox(width: 8),
+          Icon(icon, color: Colors.white, size: 18),
         ],
       ),
+    );
+  }
+}
+
+class _PillButton extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final Color? color;
+  final Gradient? gradient;
+  final Color? shadow;
+  const _PillButton({
+    required this.child,
+    this.onTap,
+    this.color,
+    this.gradient,
+    this.shadow,
+  });
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: shadow != null
+            ? [BoxShadow(color: shadow!, blurRadius: 24, offset: const Offset(0, 10))]
+            : null,
+      ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: _loading ? null : onPressed,
-          child: Center(
-            child: _loading
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                  )
-                : Text(text,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3)),
+          borderRadius: BorderRadius.circular(32),
+          onTap: onTap,
+          child: Container(
+            height: 56,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: child,
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _googleButton(VoidCallback onPressed) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: _loading ? null : onPressed,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 22,
-                height: 22,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(
-                  child: Text('G',
-                      style: TextStyle(
-                          color: Color(0xFF4285F4),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text('Continue with Google',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500)),
-            ],
+class _GoogleG extends StatelessWidget {
+  const _GoogleG();
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      shaderCallback: (b) => const LinearGradient(
+        colors: [
+          Color(0xFF4285F4),
+          Color(0xFF34A853),
+          Color(0xFFFBBC05),
+          Color(0xFFEA4335),
+        ],
+        stops: [0.0, 0.4, 0.7, 1.0],
+      ).createShader(b),
+      child: const Text('G',
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              height: 1)),
+    );
+  }
+}
+
+class _AuthBackground extends StatelessWidget {
+  const _AuthBackground();
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF1A0B2E), Color(0xFF0A0717)],
+            ),
           ),
         ),
+        const _Bubble(top: 80, left: 30, size: 60, color: Color(0xFF8B5CF6)),
+        const _Bubble(top: 140, right: 40, size: 18, color: Color(0xFFEC4899)),
+        const _Bubble(top: 260, right: 70, size: 26, color: Color(0xFF8B5CF6)),
+        const _Bubble(bottom: 220, left: 20, size: 50, color: Color(0xFF8B5CF6)),
+        const _Bubble(bottom: 120, right: 30, size: 40, color: Color(0xFFEC4899)),
+        const _Bubble(bottom: 60, left: 60, size: 22, color: Color(0xFF60A5FA)),
+        const _Sparkle(top: 110, right: 60),
+        const _Sparkle(top: 320, left: 50),
+        const _Sparkle(bottom: 280, right: 50),
+        const _Sparkle(bottom: 80, left: 30),
+      ],
+    );
+  }
+}
+
+class _Bubble extends StatelessWidget {
+  final double? top;
+  final double? bottom;
+  final double? left;
+  final double? right;
+  final double size;
+  final Color color;
+  const _Bubble({
+    this.top,
+    this.bottom,
+    this.left,
+    this.right,
+    required this.size,
+    required this.color,
+  });
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: top,
+      bottom: bottom,
+      left: left,
+      right: right,
+      child: IgnorePointer(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [color.withOpacity(0.55), color.withOpacity(0.0)],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Sparkle extends StatelessWidget {
+  final double? top;
+  final double? bottom;
+  final double? left;
+  final double? right;
+  const _Sparkle({this.top, this.bottom, this.left, this.right});
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: top,
+      bottom: bottom,
+      left: left,
+      right: right,
+      child: IgnorePointer(
+        child: Icon(Icons.auto_awesome,
+            color: Colors.white.withOpacity(0.5), size: 14),
       ),
     );
   }
