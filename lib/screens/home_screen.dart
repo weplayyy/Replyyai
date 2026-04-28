@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'tabs/chats_tab.dart';
-import 'tabs/friends_tab.dart';
+import 'tabs/rooms_tab.dart';
+import 'tabs/discover_tab.dart';
+import 'tabs/notifications_tab.dart';
 import 'tabs/profile_tab.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -10,8 +12,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _index = 0;
-  final _pages = const [ChatsTab(), FriendsTab(), ProfileTab()];
+  int _index = 4;
+  final _pages = const [
+    ChatsTab(),
+    RoomsTab(),
+    DiscoverTab(),
+    NotificationsTab(),
+    ProfileTab(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -31,24 +39,56 @@ class _HomeScreenState extends State<HomeScreen> {
           type: BottomNavigationBarType.fixed,
           currentIndex: _index,
           onTap: (i) => setState(() => _index = i),
-          selectedItemColor: const Color(0xFFEC4899),
+          selectedItemColor: const Color(0xFFB794F6),
           unselectedItemColor: Colors.white54,
-          items: const [
-            BottomNavigationBarItem(
+          showUnselectedLabels: true,
+          selectedFontSize: 11,
+          unselectedFontSize: 11,
+          items: [
+            const BottomNavigationBarItem(
                 icon: Icon(Icons.chat_bubble_outline),
                 activeIcon: Icon(Icons.chat_bubble),
                 label: 'Chats'),
+            const BottomNavigationBarItem(
+                icon: Icon(Icons.groups_outlined),
+                activeIcon: Icon(Icons.groups),
+                label: 'Rooms'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.people_outline),
-                activeIcon: Icon(Icons.people),
-                label: 'Friends'),
+                icon: _dotIcon(Icons.explore_outlined),
+                activeIcon: _dotIcon(Icons.explore),
+                label: 'Discover'),
             BottomNavigationBarItem(
+                icon: _dotIcon(Icons.notifications_outlined),
+                activeIcon: _dotIcon(Icons.notifications),
+                label: 'Notifications'),
+            const BottomNavigationBarItem(
                 icon: Icon(Icons.person_outline),
                 activeIcon: Icon(Icons.person),
                 label: 'Profile'),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _dotIcon(IconData icon) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon),
+        Positioned(
+          right: -2,
+          top: -2,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Color(0xFFEF4444),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
