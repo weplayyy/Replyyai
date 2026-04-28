@@ -1,43 +1,52 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
+import 'tabs/chats_tab.dart';
+import 'tabs/friends_tab.dart';
+import 'tabs/profile_tab.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _index = 0;
+  final _pages = const [ChatsTab(), FriendsTab(), ProfileTab()];
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
     return Scaffold(
-      body: Container(
+      backgroundColor: const Color(0xFF0F0A1F),
+      body: _pages[_index],
+      bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1A0B2E), Color(0xFF0F0A1F), Color(0xFF2D0F3D)],
+            colors: [Color(0xFF1A0B2E), Color(0xFF0F0A1F)],
           ),
+          border: Border(top: BorderSide(color: Color(0x22FFFFFF))),
         ),
-        child: SafeArea(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('Welcome to WeChat',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                Text(user?.displayName ?? user?.email ?? '',
-                    style: TextStyle(color: Colors.white.withOpacity(0.7))),
-                const SizedBox(height: 40),
-                ElevatedButton(
-                  onPressed: () => AuthService().signOut(),
-                  child: const Text('Sign out'),
-                ),
-              ],
-            ),
-          ),
+        child: BottomNavigationBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
+          currentIndex: _index,
+          onTap: (i) => setState(() => _index = i),
+          selectedItemColor: const Color(0xFFEC4899),
+          unselectedItemColor: Colors.white54,
+          items: const [
+            BottomNavigationBarItem(
+                icon: Icon(Icons.chat_bubble_outline),
+                activeIcon: Icon(Icons.chat_bubble),
+                label: 'Chats'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.people_outline),
+                activeIcon: Icon(Icons.people),
+                label: 'Friends'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline),
+                activeIcon: Icon(Icons.person),
+                label: 'Profile'),
+          ],
         ),
       ),
     );
