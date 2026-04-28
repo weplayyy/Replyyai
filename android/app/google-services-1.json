@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "813236599127",
+    "project_id": "wechat-f5189",
+    "storage_bucket": "wechat-f5189.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:813236599127:android:baf01c895e60df2fa1a612",
+        "android_client_info": {
+          "package_name": "com.app.wechat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDi3bwqGOmiH_2P9seicqp9n_ZXDWymKd0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:813236599127:android:1fccdea8474d4b89a1a612",
+        "android_client_info": {
+          "package_name": "com.weplayy.flutterapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDi3bwqGOmiH_2P9seicqp9n_ZXDWymKd0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
