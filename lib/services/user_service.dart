@@ -8,20 +8,34 @@ class UserService {
   CollectionReference<Map<String, dynamic>> get _users => _db.collection('users');
 
   Future<void> ensureUserDoc(User user, {String? displayName}) async {
-    final ref = _users.doc(user.uid);
-    final snap = await ref.get();
-    if (!snap.exists) {
-      await ref.set({
-        'uid': user.uid,
-        'displayName': displayName ?? user.displayName ?? 'User',
-        'email': user.email ?? '',
-        'photoURL': user.photoURL,
-        'charms': 0,
-        'level': 1,
-        'coins': 100,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
+  final ref = _users.doc(user.uid);
+  final snap = await ref.get();
+  if (!snap.exists) {
+    final name = displayName ?? user.displayName ?? 'User';
+    final username = (user.email ?? user.uid)
+        .split('@')
+        .first
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    await ref.set({
+      'uid': user.uid,
+      'displayName': name,
+      'email': user.email ?? '',
+      'photoURL': user.photoURL,
+      'username': username,
+      'bio': 'Talk more, Worry less.',
+      'charms': 0,
+      'level': 1,
+      'coins': 100,
+      'friendsCount': 0,
+      'momentsCount': 0,
+      'visitorsCount': 0,
+      'followingCount': 0,
+      'isOnline': true,
+      'isVerified': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
   }
 
   Stream<AppUser> watchUser(String uid) {
