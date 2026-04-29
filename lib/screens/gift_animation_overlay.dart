@@ -23,25 +23,34 @@ class _GiftAnimationOverlay extends StatefulWidget {
 class _GiftAnimationOverlayState extends State<_GiftAnimationOverlay> {
   late VideoPlayerController _ctrl;
   bool _ready = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = VideoPlayerController.asset(widget.asset)
-      ..initialize().then((_) {
-        if (!mounted) return;
-        setState(() => _ready = true);
-        _ctrl
-          ..setLooping(false)
-          ..setVolume(1.0)
-          ..play();
-        _ctrl.addListener(_onTick);
-      });
+    _ctrl = VideoPlayerController.asset(widget.asset);
+    _ctrl.initialize().then((_) {
+      if (!mounted) return;
+      setState(() => _ready = true);
+      _ctrl
+        ..setLooping(false)
+        ..setVolume(1.0)
+        ..play();
+      _ctrl.addListener(_onTick);
+    }).catchError((e, st) {
+      debugPrint('GIFT VIDEO ERROR: $e\n$st');
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    });
   }
 
   void _onTick() {
     if (!mounted) return;
     final v = _ctrl.value;
+    if (v.hasError) {
+      setState(() => _error = v.errorDescription ?? 'unknown video error');
+      return;
+    }
     if (v.isInitialized &&
         !v.isPlaying &&
         v.position >= v.duration &&
@@ -64,12 +73,21 @@ class _GiftAnimationOverlayState extends State<_GiftAnimationOverlay> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Center(
-          child: _ready
-              ? AspectRatio(
-                  aspectRatio: _ctrl.value.aspectRatio,
-                  child: VideoPlayer(_ctrl),
+          child: _error != null
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Video error:\n${widget.asset}\n\n$_error',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white),
+                  ),
                 )
-              : const CircularProgressIndicator(color: Colors.white),
+              : _ready
+                  ? AspectRatio(
+                      aspectRatio: _ctrl.value.aspectRatio,
+                      child: VideoPlayer(_ctrl),
+                    )
+                  : const CircularProgressIndicator(color: Colors.white),
         ),
       ),
     );
