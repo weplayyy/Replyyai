@@ -47,12 +47,22 @@ class ChatService {
     return _db
         .collection('chats')
         .where('participants', arrayContains: myUid)
-        .orderBy('lastMessageAt', descending: true)
         .snapshots()
-        .map((qs) => qs.docs.map((d) {
-              final m = d.data();
-              m['id'] = d.id;
-              return m;
-            }).toList());
+        .map((qs) {
+      final list = qs.docs.map((d) {
+        final m = d.data();
+        m['id'] = d.id;
+        return m;
+      }).toList();
+      list.sort((a, b) {
+        final ta = a['lastMessageAt'] as Timestamp?;
+        final tb = b['lastMessageAt'] as Timestamp?;
+        if (ta == null && tb == null) return 0;
+        if (ta == null) return 1;
+        if (tb == null) return -1;
+        return tb.compareTo(ta);
+      });
+      return list;
+    });
   }
 }
