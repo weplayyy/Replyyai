@@ -253,7 +253,12 @@ class _DiscoverTabState extends State<DiscoverTab> {
       children: [
         Expanded(child: _rankCard(second, 2, scale: 0.9)),
         const SizedBox(width: 8),
-        Expanded(child: _rankCard(first, 1, scale: 1.15)),
+        Expanded(
+  child: Transform.translate(
+    offset: const Offset(0, -20),
+    child: _rankCard(first, 1, scale: 1.15),
+  ),
+),
         const SizedBox(width: 8),
         Expanded(child: _rankCard(third, 3, scale: 0.9)),
       ],
@@ -267,12 +272,20 @@ class _DiscoverTabState extends State<DiscoverTab> {
     child: GestureDetector(
       onTap: () => _openChat(u),
       child: Container(
-        padding: const EdgeInsets.all(10),
+  height: rank == 1 ? 180 : 160,
+  padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF2A1A4A), Color(0xFF1A1233)],
-          ),
+  color: const Color(0xFF1E1530),
           borderRadius: BorderRadius.circular(20),
+          boxShadow: rank == 1
+    ? [
+        BoxShadow(
+          color: Colors.amber.withOpacity(0.4),
+          blurRadius: 20,
+          spreadRadius: 1,
+        )
+      ]
+    : [],
           border: Border.all(
             color: rank == 1
                 ? const Color(0xFFFFD700)
@@ -311,6 +324,27 @@ class _DiscoverTabState extends State<DiscoverTab> {
   );
   }
 
+  Widget _rankBadge2(int rank) {
+  if (rank == 1) {
+    return const Text('👑', style: TextStyle(fontSize: 24));
+  }
+
+  return Container(
+    padding: const EdgeInsets.all(6),
+    decoration: BoxDecoration(
+      color: Colors.white10,
+      shape: BoxShape.circle,
+    ),
+    child: Text(
+      '$rank',
+      style: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  );
+  }
+
   Widget _rankBadge(int rank, Color color) {
     if (rank == 1) {
       return const Text('👑', style: TextStyle(fontSize: 22));
@@ -338,7 +372,7 @@ class _DiscoverTabState extends State<DiscoverTab> {
     alignment: Alignment.bottomRight,
     children: [
       CircleAvatar(
-        radius: rank == 1 ? 36 : 30,
+        radius: rank == 1 ? 40 : 32,
         backgroundImage:
             (u.photoUrl != null && u.photoUrl!.isNotEmpty)
                 ? NetworkImage(u.photoUrl!)
