@@ -229,9 +229,7 @@ class _UserProfileSheet extends StatelessWidget {
             const [Color(0xFF8B5CF6), Color(0xFFA78BFA)]),
       ],
     );
-  }
-
-  Widget _miniCounts(AppUser u) {
+  }  Widget _miniCounts(AppUser u) {
     Widget mini(String label, int v) => Expanded(
           child: Column(
             children: [
@@ -339,8 +337,9 @@ class _UserProfileSheet extends StatelessWidget {
       if (!context.mounted) return;
       Navigator.pop(context);
 
-      final luckyText =
-          res.luckyCoins > 0 ? ' • ${to.displayName} got 🪙${res.luckyCoins}' : '';
+      final luckyText = res.luckyCoins > 0
+          ? ' • ${to.displayName} got 🪙${res.luckyCoins}'
+          : '';
       final jackpotText = res.jackpot ? '  🎉 JACKPOT!' : '';
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -348,7 +347,8 @@ class _UserProfileSheet extends StatelessWidget {
           backgroundColor: res.jackpot
               ? const Color(0xFFFBBF24)
               : const Color(0xFF8B5CF6),
-          content: Text('Sent ${gift.icon} ${gift.name}$luckyText$jackpotText'),
+          content:
+              Text('Sent ${gift.icon} ${gift.name}$luckyText$jackpotText'),
         ),
       );
     } catch (e) {
