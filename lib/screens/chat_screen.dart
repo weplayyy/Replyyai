@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/app_user.dart';
+import '../models/gift.dart';
 import '../models/message.dart';
 import '../services/chat_service.dart';
 import '../services/gift_service.dart';
 import '../services/user_service.dart';
 import 'gift_picker.dart';
+import 'gift_animation_overlay.dart';
+import 'user_profile_sheet.dart';
 
 class ChatScreen extends StatefulWidget {
   final AppUser other;
@@ -51,6 +54,15 @@ class _ChatScreenState extends State<ChatScreen>
     super.dispose();
   }
 
+  /// Look up the local Gift definition by id to find optional video asset.
+  Gift? _giftById(String? id) {
+    if (id == null) return null;
+    for (final g in kAllGifts) {
+      if (g.id == id) return g;
+    }
+    return null;
+  }
+
   Future<void> _send() async {
     final text = _textC.text.trim();
     if (text.isEmpty) return;
@@ -67,25 +79,40 @@ class _ChatScreenState extends State<ChatScreen>
       final result = await _gifts.sendGift(
           fromUid: _myUid, toUid: widget.other.uid, gift: gift);
       if (!mounted) return;
-      String msg = '+${result.charms} charms';
+      String msg = 'Sent ${gift.icon} ${gift.name}';
       if (result.luckyCoins > 0) {
-        msg += ' • ${widget.other.displayName} got 🪙${result.luckyCoins} lucky coins';
+        msg +=
+            ' • ${widget.other.displayName} got 🪙${result.luckyCoins} lucky coins';
       }
+      if (result.jackpot) msg += '  🎉 JACKPOT!';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: const Color(0xFF8B5CF6)),
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: result.jackpot
+              ? const Color(0xFFFBBF24)
+              : const Color(0xFF8B5CF6),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text(e.toString().replaceAll('Exception: ', ''))));
     }
   }
 
-  void _playGift(String icon, String name, int price) {
+  /// Either play the fullscreen video (if the gift has one)
+  /// or run the existing emoji burst animation.
+  void _playGift(Message m) {
+    final video = _giftById(m.giftId)?.videoAsset;
+    if (video != null && video.isNotEmpty) {
+      playGiftAnimation(context, video);
+      return;
+    }
     setState(() {
-      _giftIcon = icon;
-      _giftName = name;
-      _giftPrice = price;
+      _giftIcon = m.giftIcon ?? '🎁';
+      _giftName = m.giftName ?? 'Gift';
+      _giftPrice = m.giftPrice ?? 0;
     });
     _giftAC.forward(from: 0).then((_) {
       if (mounted) setState(() => _giftIcon = null);
@@ -106,10 +133,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (newest.type == 'gift' && newest.id != _lastGiftMessageId) {
       _lastGiftMessageId = newest.id;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _playGift(newest.giftIcon ?? '🎁', newest.giftName ?? 'Gift',
-              newest.giftPrice ?? 0);
-        }
+        if (mounted) _playGift(newest);
       });
     }
   }
@@ -122,30 +146,41 @@ class _ChatScreenState extends State<ChatScreen>
         backgroundColor: const Color(0xFF1A0B2E),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                    colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
-              ),
-              child: Center(
-                child: Text(
-                  widget.other.displayName.isNotEmpty
-                      ? widget.other.displayName[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
+        title: GestureDetector(
+          onTap: () =>
+              showUserProfileSheet(context, uid: widget.other.uid),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                      colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
+                ),
+                child: Center(
+                  child: Text(
+                    widget.other.displayName.isNotEmpty
+                        ? widget.other.displayName[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Text(widget.other.displayName,
-                style: const TextStyle(color: Colors.white, fontSize: 17)),
-          ],
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  widget.other.displayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 17),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       body: Stack(
@@ -154,28 +189,34 @@ class _ChatScreenState extends State<ChatScreen>
             children: [
               Expanded(
                 child: StreamBuilder<List<Message>>(
-  stream: _chat.watchMessages(_chatId),
-  builder: (context, snap) {
-    if (snap.hasError) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Text('Could not load messages.\n${snap.error}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70)),
-        ),
-      );
-    }
-    if (!snap.hasData) {
-      return const Center(child: CircularProgressIndicator());
-    }
+                  stream: _chat.watchMessages(_chatId),
+                  builder: (context, snap) {
+                    if (snap.hasError) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Text(
+                            'Could not load messages.\n${snap.error}',
+                            textAlign: TextAlign.center,
+                            style:
+                                const TextStyle(color: Colors.white70),
+                          ),
+                        ),
+                      );
+                    }
+                    if (!snap.hasData) {
+                      return const Center(
+                          child: CircularProgressIndicator());
+                    }
                     final msgs = snap.data!;
                     _onMessages(msgs);
                     if (msgs.isEmpty) {
                       return Center(
-                        child: Text('Say hi to ${widget.other.displayName}!',
+                        child: Text(
+                            'Say hi to ${widget.other.displayName}!',
                             style: TextStyle(
-                                color: Colors.white.withOpacity(0.5))),
+                                color:
+                                    Colors.white.withOpacity(0.5))),
                       );
                     }
                     return ListView.builder(
@@ -237,7 +278,10 @@ class _ChatScreenState extends State<ChatScreen>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: const RadialGradient(
-                            colors: [Color(0x88EC4899), Color(0x008B5CF6)],
+                            colors: [
+                              Color(0x88EC4899),
+                              Color(0x008B5CF6)
+                            ],
                           ),
                         ),
                         alignment: Alignment.center,
@@ -283,8 +327,8 @@ class _ChatScreenState extends State<ChatScreen>
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+        constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.72),
         decoration: BoxDecoration(
           gradient: mine
               ? const LinearGradient(
@@ -298,8 +342,8 @@ class _ChatScreenState extends State<ChatScreen>
             bottomRight: Radius.circular(mine ? 4 : 18),
           ),
         ),
-        child:
-            Text(text, style: const TextStyle(color: Colors.white, fontSize: 15)),
+        child: Text(text,
+            style: const TextStyle(color: Colors.white, fontSize: 15)),
       ),
     );
   }
@@ -309,18 +353,21 @@ class _ChatScreenState extends State<ChatScreen>
       alignment: Alignment.center,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0x55EC4899), Color(0x558B5CF6)],
           ),
-          border: Border.all(color: const Color(0xFFEC4899).withOpacity(0.5)),
+          border: Border.all(
+              color: const Color(0xFFEC4899).withOpacity(0.5)),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(m.giftIcon ?? '🎁', style: const TextStyle(fontSize: 40)),
+            Text(m.giftIcon ?? '🎁',
+                style: const TextStyle(fontSize: 40)),
             const SizedBox(height: 4),
             Text(
               mine
@@ -329,10 +376,7 @@ class _ChatScreenState extends State<ChatScreen>
               style: const TextStyle(color: Colors.white, fontSize: 13),
             ),
             const SizedBox(height: 2),
-            Text('🪙 ${m.giftPrice ?? 0}',
-                style: const TextStyle(
-                    color: Color(0xFFFBBF24),
-                    fontSize: 12,
+            Text('🪙 Size: 12,
                     fontWeight: FontWeight.bold)),
             if ((m.luckyCoins ?? 0) > 0)
               Padding(
@@ -369,7 +413,8 @@ class _ChatScreenState extends State<ChatScreen>
                   gradient: LinearGradient(
                       colors: [Color(0xFFFBBF24), Color(0xFFEC4899)]),
                 ),
-                child: const Icon(Icons.card_giftcard, color: Colors.white),
+                child: const Icon(Icons.card_giftcard,
+                    color: Colors.white),
               ),
             ),
             const SizedBox(width: 8),
@@ -386,7 +431,8 @@ class _ChatScreenState extends State<ChatScreen>
                   onSubmitted: (_) => _send(),
                   decoration: InputDecoration(
                     hintText: 'Type a message...',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                    hintStyle:
+                        TextStyle(color: Colors.white.withOpacity(0.4)),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 18, vertical: 14),
