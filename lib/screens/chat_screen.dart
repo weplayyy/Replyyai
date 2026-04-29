@@ -54,7 +54,6 @@ class _ChatScreenState extends State<ChatScreen>
     super.dispose();
   }
 
-  /// Look up the local Gift definition by id to find optional video asset.
   Gift? _giftById(String? id) {
     if (id == null) return null;
     for (final g in kAllGifts) {
@@ -95,14 +94,12 @@ class _ChatScreenState extends State<ChatScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text(e.toString().replaceAll('Exception: ', ''))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+      );
     }
   }
 
-  /// Either play the fullscreen video (if the gift has one)
-  /// or run the existing emoji burst animation.
   void _playGift(Message m) {
     final video = _giftById(m.giftId)?.videoAsset;
     if (video != null && video.isNotEmpty) {
@@ -147,8 +144,7 @@ class _ChatScreenState extends State<ChatScreen>
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: GestureDetector(
-          onTap: () =>
-              showUserProfileSheet(context, uid: widget.other.uid),
+          onTap: () => showUserProfileSheet(context, uid: widget.other.uid),
           child: Row(
             children: [
               Container(
@@ -165,8 +161,7 @@ class _ChatScreenState extends State<ChatScreen>
                         ? widget.other.displayName[0].toUpperCase()
                         : '?',
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold),
+                        color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -175,8 +170,7 @@ class _ChatScreenState extends State<ChatScreen>
                 child: Text(
                   widget.other.displayName,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 17),
+                  style: const TextStyle(color: Colors.white, fontSize: 17),
                 ),
               ),
             ],
@@ -198,25 +192,22 @@ class _ChatScreenState extends State<ChatScreen>
                           child: Text(
                             'Could not load messages.\n${snap.error}',
                             textAlign: TextAlign.center,
-                            style:
-                                const TextStyle(color: Colors.white70),
+                            style: const TextStyle(color: Colors.white70),
                           ),
                         ),
                       );
                     }
                     if (!snap.hasData) {
-                      return const Center(
-                          child: CircularProgressIndicator());
+                      return const Center(child: CircularProgressIndicator());
                     }
                     final msgs = snap.data!;
                     _onMessages(msgs);
                     if (msgs.isEmpty) {
                       return Center(
                         child: Text(
-                            'Say hi to ${widget.other.displayName}!',
-                            style: TextStyle(
-                                color:
-                                    Colors.white.withOpacity(0.5))),
+                          'Say hi to ${widget.other.displayName}!',
+                          style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                        ),
                       );
                     }
                     return ListView.builder(
@@ -278,10 +269,7 @@ class _ChatScreenState extends State<ChatScreen>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: const RadialGradient(
-                            colors: [
-                              Color(0x88EC4899),
-                              Color(0x008B5CF6)
-                            ],
+                            colors: [Color(0x88EC4899), Color(0x008B5CF6)],
                           ),
                         ),
                         alignment: Alignment.center,
@@ -289,11 +277,13 @@ class _ChatScreenState extends State<ChatScreen>
                             style: const TextStyle(fontSize: 140)),
                       ),
                       const SizedBox(height: 12),
-                      Text(_giftName ?? '',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold)),
+                      Text(
+                        _giftName ?? '',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold),
+                      ),
                       if ((_giftPrice ?? 0) > 0)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
@@ -304,10 +294,12 @@ class _ChatScreenState extends State<ChatScreen>
                               color: Colors.black.withOpacity(0.4),
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: Text('🪙 $_giftPrice',
-                                style: const TextStyle(
-                                    color: Color(0xFFFBBF24),
-                                    fontWeight: FontWeight.bold)),
+                            child: Text(
+                              '🪙 $_giftPrice',
+                              style: const TextStyle(
+                                  color: Color(0xFFFBBF24),
+                                  fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
                     ],
@@ -349,25 +341,23 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _giftBubble(Message m, bool mine) {
+    final priceText = '🪙 ${m.giftPrice ?? 0}';
     return Align(
       alignment: Alignment.center,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0x55EC4899), Color(0x558B5CF6)],
           ),
-          border: Border.all(
-              color: const Color(0xFFEC4899).withOpacity(0.5)),
+          border: Border.all(color: const Color(0xFFEC4899).withOpacity(0.5)),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(m.giftIcon ?? '🎁',
-                style: const TextStyle(fontSize: 40)),
+            Text(m.giftIcon ?? '🎁', style: const TextStyle(fontSize: 40)),
             const SizedBox(height: 4),
             Text(
               mine
@@ -376,17 +366,24 @@ class _ChatScreenState extends State<ChatScreen>
               style: const TextStyle(color: Colors.white, fontSize: 13),
             ),
             const SizedBox(height: 2),
-            Text('🪙 Size: 12,
-                    fontWeight: FontWeight.bold)),
+            Text(
+              priceText,
+              style: const TextStyle(
+                color: Color(0xFFFBBF24),
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             if ((m.luckyCoins ?? 0) > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   '🎰 Lucky +${m.luckyCoins} coins',
                   style: const TextStyle(
-                      color: Color(0xFFFDE047),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600),
+                    color: Color(0xFFFDE047),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
           ],
@@ -413,8 +410,7 @@ class _ChatScreenState extends State<ChatScreen>
                   gradient: LinearGradient(
                       colors: [Color(0xFFFBBF24), Color(0xFFEC4899)]),
                 ),
-                child: const Icon(Icons.card_giftcard,
-                    color: Colors.white),
+                child: const Icon(Icons.card_giftcard, color: Colors.white),
               ),
             ),
             const SizedBox(width: 8),
@@ -431,8 +427,7 @@ class _ChatScreenState extends State<ChatScreen>
                   onSubmitted: (_) => _send(),
                   decoration: InputDecoration(
                     hintText: 'Type a message...',
-                    hintStyle:
-                        TextStyle(color: Colors.white.withOpacity(0.4)),
+                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 18, vertical: 14),
