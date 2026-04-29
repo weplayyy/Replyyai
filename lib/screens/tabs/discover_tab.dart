@@ -246,117 +246,69 @@ class _DiscoverTabState extends State<DiscoverTab> {
   }
 
   Widget _podium(AppUser first, AppUser second, AppUser third) {
-    return SizedBox(
-      height: 240,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                  child: _podiumCard(second,
-                      rank: 2,
-                      borderColor: const Color(0xFF60A5FA),
-                      sparkColor: const Color(0xFF60A5FA))),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: _podiumCard(first,
-                      rank: 1,
-                      borderColor: const Color(0xFFFBBF24),
-                      sparkColor: const Color(0xFFFBBF24),
-                      featured: true)),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: _podiumCard(third,
-                      rank: 3,
-                      borderColor: const Color(0xFFEC4899),
-                      sparkColor: const Color(0xFFEC4899))),
-            ],
-          ),
-        ],
-      ),
-    );
+  return SizedBox(
+    height: 270,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(child: _rankCard(second, 2, scale: 0.9)),
+        const SizedBox(width: 8),
+        Expanded(child: _rankCard(first, 1, scale: 1.15)),
+        const SizedBox(width: 8),
+        Expanded(child: _rankCard(third, 3, scale: 0.9)),
+      ],
+    ),
+  );
   }
 
-  Widget _podiumCard(
-    AppUser u, {
-    required int rank,
-    required Color borderColor,
-    required Color sparkColor,
-    bool featured = false,
-  }) {
-    return GestureDetector(
+  Widget _rankCard(AppUser u, int rank, {double scale = 1}) {
+  return Transform.scale(
+    scale: scale,
+    child: GestureDetector(
       onTap: () => _openChat(u),
       child: Container(
-        height: featured ? 232 : 208,
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: featured
-                ? [const Color(0xFF3B2517), const Color(0xFF1F1430)]
-                : [borderColor.withOpacity(0.18), const Color(0xFF1F1430)],
+          gradient: const LinearGradient(
+            colors: [Color(0xFF2A1A4A), Color(0xFF1A1233)],
           ),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-              color: borderColor.withOpacity(featured ? 0.9 : 0.5),
-              width: featured ? 1.6 : 1.2),
-          borderRadius: BorderRadius.circular(18),
+            color: rank == 1
+                ? const Color(0xFFFFD700)
+                : Colors.white24,
+            width: 1.5,
+          ),
         ),
-        padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
         child: Column(
           children: [
-            _rankBadge(rank, borderColor),
-            const SizedBox(height: 8),
-            _avatarRing(u, borderColor, featured),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Flexible(
-                  child: Text(u.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: featured ? 15 : 13,
-                          fontWeight: FontWeight.bold)),
-                ),
-                if (rank == 1) const Text(' 🔥', style: TextStyle(fontSize: 13)),
-                if (rank == 2) const Text(' 🌙', style: TextStyle(fontSize: 13)),
-                if (rank == 3) const Text(' 🐝', style: TextStyle(fontSize: 13)),
-              ],
-            ),
+            _rankBadge2(rank),
+            const SizedBox(height: 6),
+            _avatar(u, rank),
+            const SizedBox(height: 6),
+            Text(u.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.star,
-                    color: featured
-                        ? const Color(0xFFFBBF24)
-                        : const Color(0xFFB794F6),
-                    size: 14),
-                const SizedBox(width: 3),
+                const Icon(Icons.star, size: 14, color: Colors.purpleAccent),
+                const SizedBox(width: 4),
                 Text(_fmt(u.charms),
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: Colors.white,
-                        fontSize: featured ? 14 : 12,
                         fontWeight: FontWeight.bold)),
               ],
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: _Sparkline(
-                    color: sparkColor.withOpacity(0.85),
-                    seed: u.uid.hashCode),
-              ),
             ),
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _rankBadge(int rank, Color color) {
@@ -381,56 +333,41 @@ class _DiscoverTabState extends State<DiscoverTab> {
     );
   }
 
-  Widget _avatarRing(AppUser u, Color borderColor, bool featured) {
-    final size = featured ? 78.0 : 66.0;
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.bottomRight,
-      children: [
-        Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: borderColor, width: 2),
-            gradient: const LinearGradient(
-                colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
-            boxShadow: [
-              BoxShadow(
-                  color: borderColor.withOpacity(0.4),
-                  blurRadius: 14,
-                  spreadRadius: 1),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            u.displayName.isNotEmpty ? u.displayName[0].toUpperCase() : '?',
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: featured ? 30 : 26,
-                fontWeight: FontWeight.bold),
-          ),
+  Widget _avatar(AppUser u, int rank) {
+  return Stack(
+    alignment: Alignment.bottomRight,
+    children: [
+      CircleAvatar(
+        radius: rank == 1 ? 36 : 30,
+        backgroundImage:
+            (u.photoUrl != null && u.photoUrl!.isNotEmpty)
+                ? NetworkImage(u.photoUrl!)
+                : null,
+        child: (u.photoUrl == null || u.photoUrl!.isEmpty)
+            ? Text(
+                u.displayName.isNotEmpty
+                    ? u.displayName[0].toUpperCase()
+                    : '?',
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold),
+              )
+            : null,
+      ),
+      Container(
+        width: 16,
+        height: 16,
+        decoration: BoxDecoration(
+          color: Colors.orange,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black, width: 1),
         ),
-        Positioned(
-          right: -2,
-          bottom: -2,
-          child: Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [borderColor, borderColor.withOpacity(0.7)]),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF1F1430), width: 2),
-            ),
-            child: const Icon(Icons.workspace_premium,
-                size: 12, color: Colors.white),
-          ),
-        ),
-      ],
-    );
+        child: const Icon(Icons.workspace_premium,
+            size: 10, color: Colors.white),
+      )
+    ],
+  );
   }
-
+  
   Widget _restList(List<AppUser> users, int startRank) {
     return Container(
       decoration: BoxDecoration(
