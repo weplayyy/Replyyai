@@ -308,8 +308,182 @@ class _RoomScreenState extends State<RoomScreen>
     final senderId = m['senderId'] as String? ?? '';
     final text = m['text'] as String? ?? '';
     final ts = m['createdAt'] as Timestamp?;
+
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    final isMe = senderId == me;
+
     return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       future: FirebaseFirestore.instance
-          .collection('users') **...**
+          .collection('users')
+          .doc(senderId)
+          .get(),
+      builder: (context, snap) {
+        final user = snap.data?.data();
+        final name = user?['name'] ?? 'User';
+        final avatar = user?['avatar'] ?? '';
 
-_This response is too long to display in full._
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            mainAxisAlignment:
+                isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!isMe) _avatar(avatar),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: isMe
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.start,
+                  children: [
+                    if (!isMe)
+                      Text(name,
+                          style: const TextStyle(
+                              color: Colors.white54, fontSize: 11)),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isMe
+                            ? const Color(0xFF8B5CF6)
+                            : Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(text,
+                          style: const TextStyle(color: Colors.white)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      ts != null
+                          ? TimeOfDay.fromDateTime(ts.toDate())
+                              .format(context)
+                          : '',
+                      style: const TextStyle(
+                          color: Colors.white38, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+              if (isMe) const SizedBox(width: 8),
+              if (isMe) _avatar(avatar),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _avatar(String url) {
+    return CircleAvatar(
+      radius: 14,
+      backgroundColor: Colors.white24,
+      backgroundImage: url.isNotEmpty ? NetworkImage(url) : null,
+      child: url.isEmpty
+          ? const Icon(Icons.person, size: 14, color: Colors.white)
+          : null,
+    );
+  }
+
+  Widget _aboutTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        widget.room.description.isEmpty
+            ? 'No description available'
+            : widget.room.description,
+        style: const TextStyle(color: Colors.white70),
+      ),
+    );
+  }
+
+  Widget _membersTab() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(widget.room.id)
+          .collection('members')
+          .snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final docs = snap.data!.docs;
+
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (_, i) {
+            final data = docs[i].data();
+            final name = data['name'] ?? 'User';
+
+            return ListTile(
+              title: Text(name,
+                  style: const TextStyle(color: Colors.white)),
+              leading: const CircleAvatar(
+                child: Icon(Icons.person),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _leaderboardTab() {
+    return const Center(
+      child: Text(
+        'Leaderboard coming soon',
+        style: TextStyle(color: Colors.white54),
+      ),
+    );
+  }
+
+  Widget _inputBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+      color: const Color(0xFF140D2A),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _msgC,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Type message...',
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.send, color: Color(0xFF8B5CF6)),
+            onPressed: _send,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bottomToolbar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      color: const Color(0xFF0F0A1F),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _tool(Icons.mic),
+          _tool(Icons.card_giftcard),
+          _tool(Icons.emoji_emotions),
+          _tool(Icons.more_horiz),
+        ],
+      ),
+    );
+  }
+
+  Widget _tool(IconData icon) {
+    return Icon(icon, color: Colors.white70, size: 22);
+  }
+}
