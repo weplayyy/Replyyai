@@ -7,12 +7,16 @@ class Gift {
   final int price;
   final List<Color> gradient;
 
+  /// Optional fullscreen animation (e.g. mp4 in assets/gifts/...).
+  final String? videoAsset;
+
   const Gift({
     required this.id,
     required this.name,
     required this.icon,
     required this.price,
     required this.gradient,
+    this.videoAsset,
   });
 }
 
@@ -27,6 +31,12 @@ const List<Gift> kAllGifts = [
       gradient: [Color(0xFF06B6D4), Color(0xFF22D3EE)]),
   Gift(id: 'rocket', name: 'Rocket', icon: '🚀', price: 5000,
       gradient: [Color(0xFF8B5CF6), Color(0xFFA78BFA)]),
-  Gift(id: 'castle', name: 'Castle', icon: '🏰', price: 50000,
-      gradient: [Color(0xFFF59E0B), Color(0xFFFBBF24)]),
+  Gift(
+    id: 'royal_palace',
+    name: 'Royal Palace',
+    icon: '🏰',
+    price: 50000,
+    gradient: [Color(0xFFF59E0B), Color(0xFFFBBF24)],
+    videoAsset: 'assets/gifts/royal_palace.mp4',
+  ),
 ];
