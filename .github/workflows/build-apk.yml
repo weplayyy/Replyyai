@@ -39,24 +39,76 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Re-encode gift videos to H.264 baseline
+      - name: Install ffmpeg
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
-          mkdir -p assets/gifts/_src
+
+      - name: Clean stray files in assets/gifts
+        run: |
+          # Remove the stray 1-byte "a" file if it exists
+          [ -f assets/gifts/a ] && rm -f assets/gifts/a || true
+          # Remove any leftover _src dir from a previous run
+          rm -rf assets/gifts/_src
+          ls -lh assets/gifts/ || true
+
+      - name: Probe original gift videos (before re-encode)
+        run: |
+          echo "=========== ORIGINAL FILES ==========="
           for f in assets/gifts/*.mp4; do
             [ -f "$f" ] || continue
+            echo "----- $f -----"
+            ffprobe -v error -show_entries \
+              stream=index,codec_type,codec_name,profile,pix_fmt,width,height,r_frame_rate,duration \
+              -of default=nw=1 "$f" || echo "ffprobe failed on $f"
+          done
+
+      - name: Re-encode gift videos to H.264 baseline (Android-safe)
+        run: |
+          mkdir -p assets/gifts/_src
+          shopt -s nullglob
+          for f in assets/gifts/*.mp4; do
             name=$(basename "$f")
             mv "$f" "assets/gifts/_src/$name"
+
             ffmpeg -y -i "assets/gifts/_src/$name" \
+              -map 0:v:0 -map 0:a:0? \
               -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p \
-              -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" \
+              -preset veryfast -crf 23 \
+              -vf "scale='min(720,iw)':-2:force_original_aspect_ratio=decrease,fps=30,format=yuv420p" \
+              -g 30 -keyint_min 30 -sc_threshold 0 \
               -c:a aac -b:a 128k -ac 2 -ar 44100 \
               -movflags +faststart \
               "$f"
+
+            echo "----- ENCODED $f -----"
+            ffprobe -v error -show_entries \
+              stream=index,codec_type,codec_name,profile,pix_fmt,width,height,r_frame_rate,duration \
+              -of default=nw=1 "$f"
           done
           rm -rf assets/gifts/_src
+          echo "=========== FINAL FILES ==========="
           ls -lh assets/gifts/
+
+      - name: Fail build if any gift video is invalid
+        run: |
+          bad=0
+          for f in assets/gifts/*.mp4; do
+            [ -f "$f" ] || continue
+            dur=$(ffprobe -v error -select_streams v:0 \
+              -show_entries stream=duration -of default=nw=1:nk=1 "$f")
+            pix=$(ffprobe -v error -select_streams v:0 \
+              -show_entries stream=pix_fmt -of default=nw=1:nk=1 "$f")
+            cod=$(ffprobe -v error -select_streams v:0 \
+              -show_entries stream=codec_name -of default=nw=1:nk=1 "$f")
+            echo "$f -> codec=$cod pix=$pix dur=$dur"
+            if [ "$cod" != "h264" ] || [ "$pix" != "yuv420p" ] \
+               || [ -z "$dur" ] || [ "$dur" = "N/A" ] || [ "$dur" = "0.000000" ]; then
+              echo "::error file=$f::Invalid gift video (codec=$cod pix=$pix dur=$dur)"
+              bad=1
+            fi
+          done
+          exit $bad
 
       - name: Build APK
         run: flutter build apk --release
