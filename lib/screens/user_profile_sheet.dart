@@ -6,9 +6,10 @@ import '../models/gift.dart';
 import '../services/user_service.dart';
 import '../services/gift_service.dart';
 import 'gift_picker.dart';
+import 'chat_screen.dart';
 
 /// Show a user's mini-profile as a bottom sheet.
-/// If [roomId] is provided, gifts are broadcast in that room.
+/// If [roomId] is provided, gifts are broadcast in that room feed.
 /// If null, gifts go through the normal 1:1 chat flow.
 Future<void> showUserProfileSheet(
   BuildContext context, {
@@ -77,7 +78,8 @@ class _UserProfileSheet extends StatelessWidget {
 
   Widget _grabber() => Center(
         child: Container(
-          width: 40, height: 4,
+          width: 40,
+          height: 4,
           decoration: BoxDecoration(
             color: Colors.white24,
             borderRadius: BorderRadius.circular(2),
@@ -137,7 +139,8 @@ class _UserProfileSheet extends StatelessWidget {
               const SizedBox(height: 6),
               Row(children: [
                 Container(
-                  width: 8, height: 8,
+                  width: 8,
+                  height: 8,
                   decoration: BoxDecoration(
                     color: u.isOnline
                         ? const Color(0xFF22C55E)
@@ -180,8 +183,7 @@ class _UserProfileSheet extends StatelessWidget {
                 const SnackBar(content: Text('ID copied')),
               );
             },
-            child: const Icon(Icons.copy,
-                color: Colors.white54, size: 16),
+            child: const Icon(Icons.copy, color: Colors.white54, size: 16),
           ),
         ],
       ),
@@ -269,7 +271,12 @@ class _UserProfileSheet extends StatelessWidget {
     return Row(children: [
       Expanded(
         child: OutlinedButton.icon(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Navigator.pop(context);
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => ChatScreen(other: u)),
+            );
+          },
           icon: const Icon(Icons.chat_bubble_outline, size: 18),
           label: const Text('Message'),
           style: OutlinedButton.styleFrom(
@@ -318,26 +325,9 @@ class _UserProfileSheet extends StatelessWidget {
             );
 
       if (!context.mounted) return;
-      Navigator.pop(context);
+      Navigator.pop(context); // close the profile sheet
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: const Color(0xFF8B5CF6),
-          content: Text(
-            'Sent ${gift.icon} ${gift.name} • +${res.charms} charms'
-            '${res.luckyCoins > 0 ? " • lucky +${res.luckyCoins} 🪙" : ""}',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('$e')));
-    }
-  }
-
-  String _fmt(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
-  }
-}
+          backgroundColor:
+              res.jackpot ? const Color(0xFFF
