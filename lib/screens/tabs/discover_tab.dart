@@ -72,17 +72,15 @@ class _DiscoverTabState extends State<DiscoverTab> {
     );
   }
 
+  // ────────────────────────── TOP BAR ──────────────────────────
   Widget _topBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const _SelectFriendPage())),
-            child: _circleBtn(Icons.person_add_alt_1_rounded),
+            onTap: () => Navigator.maybePop(context),
+            child: _circleBtn(Icons.arrow_back_ios_new_rounded),
           ),
           const Spacer(),
           const Text('Ranking',
@@ -91,7 +89,10 @@ class _DiscoverTabState extends State<DiscoverTab> {
                   fontSize: 18,
                   fontWeight: FontWeight.bold)),
           const Spacer(),
-          _circleBtn(Icons.help_outline_rounded),
+          GestureDetector(
+            onTap: () {},
+            child: _circleBtn(Icons.help_outline_rounded),
+          ),
         ],
       ),
     );
@@ -104,11 +105,13 @@ class _DiscoverTabState extends State<DiscoverTab> {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.08),
         shape: BoxShape.circle,
+        border: Border.all(color: Colors.white12),
       ),
-      child: Icon(icon, color: Colors.white, size: 18),
+      child: Icon(icon, color: Colors.white, size: 16),
     );
   }
 
+  // ────────────────────────── CATEGORY ROW ──────────────────────
   Widget _categoryRow() {
     return SizedBox(
       height: 36,
@@ -159,6 +162,7 @@ class _DiscoverTabState extends State<DiscoverTab> {
     );
   }
 
+  // ────────────────────────── PERIOD ROW ───────────────────────
   Widget _periodRow() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -223,6 +227,7 @@ class _DiscoverTabState extends State<DiscoverTab> {
     );
   }
 
+  // ────────────────────────── RANKING BODY ─────────────────────
   Widget _rankingContent(List<AppUser> users) {
     if (users.isEmpty) {
       return Center(
@@ -245,118 +250,139 @@ class _DiscoverTabState extends State<DiscoverTab> {
     );
   }
 
+  // ────────────────────────── PODIUM ──────────────────────────
   Widget _podium(AppUser first, AppUser second, AppUser third) {
-  return SizedBox(
-    height: 270,
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(child: _rankCard(second, 2, scale: 0.9)),
-        const SizedBox(width: 8),
-        Expanded(
-  child: Transform.translate(
-    offset: const Offset(0, -20),
-    child: _rankCard(first, 1, scale: 1.15),
-  ),
-),
-        const SizedBox(width: 8),
-        Expanded(child: _rankCard(third, 3, scale: 0.9)),
-      ],
-    ),
-  );
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 28),
+              child: _rankCard(second, 2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: _rankCard(first, 1, isFirst: true)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 28),
+              child: _rankCard(third, 3),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _rankCard(AppUser u, int rank, {double scale = 1}) {
-  return Transform.scale(
-    scale: scale,
-    child: GestureDetector(
+  Widget _rankCard(AppUser u, int rank, {bool isFirst = false}) {
+    final colors = _rankColors(rank);
+
+    return GestureDetector(
       onTap: () => _openChat(u),
       child: Container(
-  height: rank == 1 ? 180 : 160,
-  padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-  color: const Color(0xFF1E1530),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: rank == 1
-    ? [
-        BoxShadow(
-          color: Colors.amber.withOpacity(0.4),
-          blurRadius: 20,
-          spreadRadius: 1,
-        )
-      ]
-    : [],
-          border: Border.all(
-            color: rank == 1
-                ? const Color(0xFFFFD700)
-                : Colors.white24,
-            width: 1.5,
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: colors.bg,
           ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: colors.border.withOpacity(isFirst ? 0.95 : 0.55),
+            width: isFirst ? 2 : 1.2,
+          ),
+          boxShadow: isFirst
+              ? [
+                  BoxShadow(
+                    color: colors.glow.withOpacity(0.45),
+                    blurRadius: 22,
+                    spreadRadius: 1,
+                  )
+                ]
+              : [],
         ),
-        child: Column(
-          children: [
-            _rankBadge2(rank),
-            const SizedBox(height: 6),
-            _avatar(u, rank),
-            const SizedBox(height: 6),
-            Text(u.displayName,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _podiumBadge(rank),
+              const SizedBox(height: 6),
+              _podiumAvatar(u, rank, isFirst),
+              const SizedBox(height: 8),
+              Text(
+                u.displayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: isFirst ? 15 : 14,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.star,
+                      size: 12, color: Color(0xFFB794F6)),
+                  const SizedBox(width: 4),
+                  Text(_fmt(u.charms),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 28,
+                child: _Sparkline(color: colors.spark, seed: rank * 7),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _podiumBadge(int rank) {
+    if (rank == 1) {
+      // Gold crown with "1" inside
+      return SizedBox(
+        height: 30,
+        child: Stack(
+          alignment: Alignment.center,
+          children: const [
+            Icon(Icons.workspace_premium,
+                color: Color(0xFFFFD24A), size: 32),
+            Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                '1',
+                style: TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.star, size: 14, color: Colors.purpleAccent),
-                const SizedBox(width: 4),
-                Text(_fmt(u.charms),
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold)),
-              ],
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
-      ),
-    ),
-  );
-  }
-
-  Widget _rankBadge2(int rank) {
-  if (rank == 1) {
-    return const Text('👑', style: TextStyle(fontSize: 24));
-  }
-
-  return Container(
-    padding: const EdgeInsets.all(6),
-    decoration: BoxDecoration(
-      color: Colors.white10,
-      shape: BoxShape.circle,
-    ),
-    child: Text(
-      '$rank',
-      style: const TextStyle(
-        color: Colors.white,
-        fontWeight: FontWeight.bold,
-      ),
-    ),
-  );
-  }
-
-  Widget _rankBadge(int rank, Color color) {
-    if (rank == 1) {
-      return const Text('👑', style: TextStyle(fontSize: 22));
+      );
     }
+    final color =
+        rank == 2 ? const Color(0xFF7BB7FF) : const Color(0xFFE6926B);
     return Container(
       width: 26,
       height: 26,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-            colors: [color, color.withOpacity(0.7)]),
+          colors: [color, color.withOpacity(0.7)],
+        ),
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white24, width: 1),
       ),
       alignment: Alignment.center,
       child: Text('$rank',
@@ -367,46 +393,97 @@ class _DiscoverTabState extends State<DiscoverTab> {
     );
   }
 
-  Widget _avatar(AppUser u, int rank) {
-  return Stack(
-    alignment: Alignment.bottomRight,
-    children: [
-      CircleAvatar(
-        radius: rank == 1 ? 40 : 32,
-        backgroundImage:
-            (u.photoUrl != null && u.photoUrl!.isNotEmpty)
-                ? NetworkImage(u.photoUrl!)
+  Widget _podiumAvatar(AppUser u, int rank, bool isFirst) {
+    final ringColor = rank == 1
+        ? const Color(0xFFFFD24A)
+        : (rank == 2 ? const Color(0xFF7BB7FF) : const Color(0xFFE6926B));
+    final radius = isFirst ? 36.0 : 30.0;
+    return Stack(
+      alignment: Alignment.bottomRight,
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(2.5),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: ringColor, width: 2.4),
+            boxShadow: [
+              BoxShadow(
+                  color: ringColor.withOpacity(0.45), blurRadius: 10),
+            ],
+          ),
+          child: CircleAvatar(
+            radius: radius,
+            backgroundColor: Colors.white12,
+            backgroundImage:
+                (u.photoURL != null && u.photoURL!.isNotEmpty)
+                    ? NetworkImage(u.photoURL!)
+                    : null,
+            child: (u.photoURL == null || u.photoURL!.isEmpty)
+                ? Text(
+                    u.displayName.isNotEmpty
+                        ? u.displayName[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22),
+                  )
                 : null,
-        child: (u.photoUrl == null || u.photoUrl!.isEmpty)
-            ? Text(
-                u.displayName.isNotEmpty
-                    ? u.displayName[0].toUpperCase()
-                    : '?',
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold),
-              )
-            : null,
-      ),
-      Container(
-        width: 16,
-        height: 16,
-        decoration: BoxDecoration(
-          color: Colors.orange,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.black, width: 1),
+          ),
         ),
-        child: const Icon(Icons.workspace_premium,
-            size: 10, color: Colors.white),
-      )
-    ],
-  );
+        Positioned(
+          right: -2,
+          bottom: 2,
+          child: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: ringColor,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF1F1530), width: 2),
+            ),
+            child: const Icon(Icons.workspace_premium,
+                color: Colors.white, size: 11),
+          ),
+        ),
+      ],
+    );
   }
-  
+
+  _RankColors _rankColors(int rank) {
+    switch (rank) {
+      case 1:
+        return _RankColors(
+          bg: const [Color(0xFF3A2A14), Color(0xFF1F1530)],
+          border: const Color(0xFFFFD24A),
+          glow: const Color(0xFFFFB347),
+          spark: const Color(0xFFFFB347),
+        );
+      case 2:
+        return _RankColors(
+          bg: const [Color(0xFF1E2A4A), Color(0xFF181A38)],
+          border: const Color(0xFF7BB7FF),
+          glow: const Color(0xFF7BB7FF),
+          spark: const Color(0xFF60A5FA),
+        );
+      default:
+        return _RankColors(
+          bg: const [Color(0xFF3A1F2A), Color(0xFF201430)],
+          border: const Color(0xFFE6926B),
+          glow: const Color(0xFFE6926B),
+          spark: const Color(0xFFEF6F70),
+        );
+    }
+  }
+
+  // ────────────────────────── REST LIST ────────────────────────
   Widget _restList(List<AppUser> users, int startRank) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.04),
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
       child: Column(
@@ -438,24 +515,24 @@ class _DiscoverTabState extends State<DiscoverTab> {
             const SizedBox(width: 6),
             Stack(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                        colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    u.displayName.isNotEmpty
-                        ? u.displayName[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16),
-                  ),
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Colors.white12,
+                  backgroundImage:
+                      (u.photoURL != null && u.photoURL!.isNotEmpty)
+                          ? NetworkImage(u.photoURL!)
+                          : null,
+                  child: (u.photoURL == null || u.photoURL!.isEmpty)
+                      ? Text(
+                          u.displayName.isNotEmpty
+                              ? u.displayName[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15),
+                        )
+                      : null,
                 ),
                 Positioned(
                   right: 0,
@@ -485,7 +562,8 @@ class _DiscoverTabState extends State<DiscoverTab> {
             ),
             Row(
               children: [
-                const Icon(Icons.star, color: Color(0xFFB794F6), size: 14),
+                const Icon(Icons.star,
+                    color: Color(0xFFB794F6), size: 14),
                 const SizedBox(width: 3),
                 Text(_fmt(u.charms),
                     style: const TextStyle(
@@ -511,6 +589,7 @@ class _DiscoverTabState extends State<DiscoverTab> {
     );
   }
 
+  // ────────────────────────── SELF BAR ─────────────────────────
   Widget _selfBar() {
     final me = FirebaseAuth.instance.currentUser;
     if (me == null) return const SizedBox.shrink();
@@ -541,24 +620,24 @@ class _DiscoverTabState extends State<DiscoverTab> {
                     color: Color(0xFFB794F6), size: 18),
               ),
               const SizedBox(width: 10),
-              Container(
-                width: 38,
-                height: 38,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                      colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  (u?.displayName.isNotEmpty ?? false)
-                      ? u!.displayName[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16),
-                ),
+              CircleAvatar(
+                radius: 19,
+                backgroundColor: Colors.white12,
+                backgroundImage:
+                    (u?.photoURL != null && u!.photoURL!.isNotEmpty)
+                        ? NetworkImage(u.photoURL!)
+                        : null,
+                child: (u?.photoURL == null || (u?.photoURL ?? '').isEmpty)
+                    ? Text(
+                        (u?.displayName.isNotEmpty ?? false)
+                            ? u!.displayName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15),
+                      )
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -652,6 +731,20 @@ class _DiscoverTabState extends State<DiscoverTab> {
   }
 }
 
+// ────────────────────────── HELPERS ─────────────────────────
+class _RankColors {
+  final List<Color> bg;
+  final Color border;
+  final Color glow;
+  final Color spark;
+  _RankColors({
+    required this.bg,
+    required this.border,
+    required this.glow,
+    required this.spark,
+  });
+}
+
 class _SelectFriendPage extends StatelessWidget {
   const _SelectFriendPage();
   @override
@@ -692,7 +785,8 @@ class _SparkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rand = math.Random(seed);
-    final pts = List<double>.generate(8, (_) => 0.15 + rand.nextDouble() * 0.85);
+    final pts =
+        List<double>.generate(8, (_) => 0.15 + rand.nextDouble() * 0.85);
 
     final stroke = Paint()
       ..color = color
