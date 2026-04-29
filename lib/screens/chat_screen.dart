@@ -154,11 +154,21 @@ class _ChatScreenState extends State<ChatScreen>
             children: [
               Expanded(
                 child: StreamBuilder<List<Message>>(
-                  stream: _chat.watchMessages(_chatId),
-                  builder: (context, snap) {
-                    if (!snap.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+  stream: _chat.watchMessages(_chatId),
+  builder: (context, snap) {
+    if (snap.hasError) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text('Could not load messages.\n${snap.error}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70)),
+        ),
+      );
+    }
+    if (!snap.hasData) {
+      return const Center(child: CircularProgressIndicator());
+    }
                     final msgs = snap.data!;
                     _onMessages(msgs);
                     if (msgs.isEmpty) {
