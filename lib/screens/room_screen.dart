@@ -1,0 +1,315 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/room.dart';
+import '../services/room_service.dart';
+
+class RoomScreen extends StatefulWidget {
+  final Room room;
+  const RoomScreen({super.key, required this.room});
+  @override
+  State<RoomScreen> createState() => _RoomScreenState();
+}
+
+class _RoomScreenState extends State<RoomScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tab;
+  final _msgC = TextEditingController();
+  final _svc = RoomService();
+  final _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = TabController(length: 4, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tab.dispose();
+    _msgC.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _msgC.text.trim();
+    if (text.isEmpty) return;
+    _msgC.clear();
+    final me = FirebaseAuth.instance.currentUser!;
+    await _svc.sendMessage(roomId: widget.room.id, senderId: me.uid, text: text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F0A1F),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _header(),
+            _pinnedBanner(),
+            _tabBar(),
+            Expanded(
+              child: TabBarView(
+                controller: _tab,
+                children: [
+                  _chatTab(),
+                  _aboutTab(),
+                  _membersTab(),
+                  _leaderboardTab(),
+                ],
+              ),
+            ),
+            _inputBar(),
+            _bottomToolbar(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _header() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white, size: 16),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: const LinearGradient(
+                  colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
+              boxShadow: [
+                BoxShadow(
+                    color: const Color(0xFFEC4899).withOpacity(0.5),
+                    blurRadius: 14),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: Text(widget.room.emoji,
+                style: const TextStyle(fontSize: 22)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(widget.room.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Text(
+                        'ID: ${widget.room.id.isEmpty ? "—" : widget.room.id.substring(0, widget.room.id.length.clamp(0, 6))}',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 11)),
+                    const SizedBox(width: 6),
+                    Container(
+                        width: 4,
+                        height: 4,
+                        decoration: BoxDecoration(
+                            color: Colors.white24, shape: BoxShape.circle)),
+                    const SizedBox(width: 6),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                          color: Color(0xFF22C55E),
+                          shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 4),
+                    Text('${widget.room.onlineCount} Online',
+                        style: const TextStyle(
+                            color: Color(0xFF22C55E), fontSize: 11)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          _iconBtn(Icons.share_rounded, () {}),
+          const SizedBox(width: 6),
+          _iconBtn(Icons.notifications_outlined, () {}, dot: true),
+          const SizedBox(width: 6),
+          _iconBtn(Icons.more_horiz, () {}),
+        ],
+      ),
+    );
+  }
+
+  Widget _iconBtn(IconData ic, VoidCallback onTap, {bool dot = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(ic, color: Colors.white, size: 16),
+          ),
+          if (dot)
+            Positioned(
+              right: 6,
+              top: 6,
+              child: Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF8B5CF6),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pinnedBanner() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF8B5CF6).withOpacity(0.12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: const Color(0xFF8B5CF6).withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            const Text('📌', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Text('Pinned',
+                          style: TextStyle(
+                              color: Color(0xFFB794F6),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold)),
+                      SizedBox(width: 4),
+                      Icon(Icons.verified,
+                          color: Color(0xFF8B5CF6), size: 12),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.room.description.isEmpty
+                        ? 'Be kind, be real, and respect everyone here 💜'
+                        : widget.room.description,
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 13, height: 1.3),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.white54, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tabBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+      child: TabBar(
+        controller: _tab,
+        isScrollable: true,
+        indicatorColor: const Color(0xFF8B5CF6),
+        indicatorWeight: 2.5,
+        labelColor: Colors.white,
+        unselectedLabelColor: Colors.white54,
+        labelStyle:
+            const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        unselectedLabelStyle: const TextStyle(fontSize: 13),
+        tabs: [
+          const Tab(text: 'Chat'),
+          const Tab(text: 'About'),
+          Tab(text: 'Members ${widget.room.onlineCount}'),
+          const Tab(text: 'Leaderboard'),
+        ],
+      ),
+    );
+  }
+
+  Widget _chatTab() {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _svc.watchMessages(widget.room.id),
+      builder: (_, snap) {
+        if (snap.hasError) {
+          return Center(
+              child: Text('Error: ${snap.error}',
+                  style: const TextStyle(color: Colors.white70)));
+        }
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final msgs = snap.data!;
+        if (msgs.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'No messages yet.\nBe the first to say hi 👋',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.5), fontSize: 14),
+              ),
+            ),
+          );
+        }
+        return ListView.builder(
+          controller: _scroll,
+          reverse: true,
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          itemCount: msgs.length,
+          itemBuilder: (_, i) => _messageBubble(msgs[i]),
+        );
+      },
+    );
+  }
+
+  Widget _messageBubble(Map<String, dynamic> m) {
+    final senderId = m['senderId'] as String? ?? '';
+    final text = m['text'] as String? ?? '';
+    final ts = m['createdAt'] as Timestamp?;
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      future: FirebaseFirestore.instance
+          .collection('users') **...**
+
+_This response is too long to display in full._
