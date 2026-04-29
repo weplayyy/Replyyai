@@ -61,8 +61,10 @@ const List<Gift> kAllGifts = [
     gradient: [Color(0xFFFBBF24), Color(0xFFEC4899)],
   ),
   Gift(
-    id: 'lucky_cat', name: 'Lucky Cat', icon: '🐱', price: 799,
+    id: 'vidvan', name: 'Vidhvan', icon: '🐱', price: 177799,
     gradient: [Color(0xFFFBBF24), Color(0xFFF59E0B)],
+    imageAsset: 'assets/gifts/vidvan.png',
+    videoAsset: 'assets/gifts/vidvan.mp4',
   ),
   Gift(
     id: 'royal_palace', name: 'Royal Palace', icon: '🏰', price: 50000,
