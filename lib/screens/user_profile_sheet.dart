@@ -8,9 +8,6 @@ import '../services/gift_service.dart';
 import 'gift_picker.dart';
 import 'chat_screen.dart';
 
-/// Show a user's mini-profile as a bottom sheet.
-/// If [roomId] is provided, gifts are broadcast in that room feed.
-/// If null, gifts go through the normal 1:1 chat flow.
 Future<void> showUserProfileSheet(
   BuildContext context, {
   required String uid,
@@ -137,22 +134,26 @@ class _UserProfileSheet extends StatelessWidget {
                 Text('@${u.username}',
                     style: const TextStyle(color: Colors.white54)),
               const SizedBox(height: 6),
-              Row(children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: u.isOnline
-                        ? const Color(0xFF22C55E)
-                        : Colors.white24,
-                    shape: BoxShape.circle,
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: u.isOnline
+                          ? const Color(0xFF22C55E)
+                          : Colors.white24,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                Text(u.isOnline ? 'Online now' : 'Offline',
+                  const SizedBox(width: 6),
+                  Text(
+                    u.isOnline ? 'Online now' : 'Offline',
                     style: const TextStyle(
-                        color: Colors.white70, fontSize: 12)),
-              ]),
+                        color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -170,8 +171,7 @@ class _UserProfileSheet extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.badge_outlined,
-              color: Colors.white54, size: 18),
+          const Icon(Icons.badge_outlined, color: Colors.white54, size: 18),
           const SizedBox(width: 8),
           Text('ID: $shortId',
               style: const TextStyle(color: Colors.white, fontSize: 13)),
@@ -202,48 +202,58 @@ class _UserProfileSheet extends StatelessWidget {
               border: Border.all(color: grad.first.withOpacity(0.4)),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(children: [
-              Text(value,
+            child: Column(
+              children: [
+                Text(
+                  value,
                   style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 2),
-              Text(label,
-                  style: const TextStyle(
-                      color: Colors.white60, fontSize: 11)),
-            ]),
+                      fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 2),
+                Text(label,
+                    style: const TextStyle(
+                        color: Colors.white60, fontSize: 11)),
+              ],
+            ),
           ),
         );
-    return Row(children: [
-      cell('Lv.', '${u.level}',
-          const [Color(0xFFFBBF24), Color(0xFFF59E0B)]),
-      cell('Charms', _fmt(u.charms),
-          const [Color(0xFFEC4899), Color(0xFFF472B6)]),
-      cell('Coins', _fmt(u.coins),
-          const [Color(0xFF8B5CF6), Color(0xFFA78BFA)]),
-    ]);
+    return Row(
+      children: [
+        cell('Lv.', '${u.level}',
+            const [Color(0xFFFBBF24), Color(0xFFF59E0B)]),
+        cell('Charms', _fmt(u.charms),
+            const [Color(0xFFEC4899), Color(0xFFF472B6)]),
+        cell('Coins', _fmt(u.coins),
+            const [Color(0xFF8B5CF6), Color(0xFFA78BFA)]),
+      ],
+    );
   }
 
   Widget _miniCounts(AppUser u) {
     Widget mini(String label, int v) => Expanded(
-          child: Column(children: [
-            Text('$v',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14)),
-            Text(label,
-                style: const TextStyle(
-                    color: Colors.white54, fontSize: 11)),
-          ]),
+          child: Column(
+            children: [
+              Text('$v',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14)),
+              Text(label,
+                  style: const TextStyle(
+                      color: Colors.white54, fontSize: 11)),
+            ],
+          ),
         );
-    return Row(children: [
-      mini('Friends', u.friendsCount),
-      mini('Following', u.followingCount),
-      mini('Moments', u.momentsCount),
-      mini('Visitors', u.visitorsCount),
-    ]);
+    return Row(
+      children: [
+        mini('Friends', u.friendsCount),
+        mini('Following', u.followingCount),
+        mini('Moments', u.momentsCount),
+        mini('Visitors', u.visitorsCount),
+      ],
+    );
   }
 
   Widget _bioCard(AppUser u) {
@@ -268,43 +278,45 @@ class _UserProfileSheet extends StatelessWidget {
   }
 
   Widget _actions(BuildContext context, AppUser u) {
-    return Row(children: [
-      Expanded(
-        child: OutlinedButton.icon(
-          onPressed: () {
-            Navigator.pop(context);
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => ChatScreen(other: u)),
-            );
-          },
-          icon: const Icon(Icons.chat_bubble_outline, size: 18),
-          label: const Text('Message'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: const BorderSide(color: Colors.white24),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => ChatScreen(other: u)),
+              );
+            },
+            icon: const Icon(Icons.chat_bubble_outline, size: 18),
+            label: const Text('Message'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white24),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
           ),
         ),
-      ),
-      const SizedBox(width: 10),
-      Expanded(
-        child: ElevatedButton.icon(
-          onPressed: () => _onSendGift(context, u),
-          icon: const Text('🎁', style: TextStyle(fontSize: 16)),
-          label: const Text('Send Gift'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF8B5CF6),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
-            elevation: 0,
+        const SizedBox(width: 10),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _onSendGift(context, u),
+            icon: const Text('🎁', style: TextStyle(fontSize: 16)),
+            label: const Text('Send Gift'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B5CF6),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
           ),
         ),
-      ),
-    ]);
+      ],
+    );
   }
 
   Future<void> _onSendGift(BuildContext context, AppUser to) async {
@@ -325,9 +337,31 @@ class _UserProfileSheet extends StatelessWidget {
             );
 
       if (!context.mounted) return;
-      Navigator.pop(context); // close the profile sheet
+      Navigator.pop(context);
+
+      final luckyText =
+          res.luckyCoins > 0 ? ' • ${to.displayName} got 🪙${res.luckyCoins}' : '';
+      final jackpotText = res.jackpot ? '  🎉 JACKPOT!' : '';
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor:
-              res.jackpot ? const Color(0xFFF
+          backgroundColor: res.jackpot
+              ? const Color(0xFFFBBF24)
+              : const Color(0xFF8B5CF6),
+          content: Text('Sent ${gift.icon} ${gift.name}$luckyText$jackpotText'),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$e')),
+      );
+    }
+  }
+
+  String _fmt(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+    return '$n';
+  }
+}
