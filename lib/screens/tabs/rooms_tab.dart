@@ -530,32 +530,45 @@ class _CreateRoomBodyState extends State<_CreateRoomBody> {
     super.dispose();
   }
 
-  Future<void> _create() async {
+    Future<void> _create() async {
     if (_name.text.trim().isEmpty) return;
     setState(() => _busy = true);
     try {
       final me = FirebaseAuth.instance.currentUser!;
-      final id = await RoomService().createRoom(Room(
+      final meDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(me.uid)
+          .get();
+      final m = meDoc.data() ?? {};
+
+      await RoomService().createRoom(Room(
         id: '',
         name: _name.text.trim(),
         description: _desc.text.trim(),
         category: _category,
         tags: [_category],
         emoji: _emoji,
-        creatorId: me.uid,
-        onlineCount: 1,
+        photoUrl: RoomPresets.firstFor(_category),
+        ownerId: me.uid,
+        ownerName: (m['displayName'] ?? 'Owner') as String,
+        ownerPhoto: m['photoURL'] as String?,
+        ownerCharms: (m['charms'] ?? 0) as int,
       ));
       if (mounted) Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Room "${_name.text.trim()}" created')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Room "${_name.text.trim()}" created')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
+    }
+  
   @override
   Widget build(BuildContext context) {
     final cats = kRoomCategories
