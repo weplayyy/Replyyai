@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum RoomType { temporary, advanced }
-enum RoomStatus { live, pendingDelete, deleted }
+enum RoomStatus { live, pendingDelete, frozen, deleted }
 
 extension RoomTypeX on RoomType {
   String toRaw() => this == RoomType.advanced ? 'advanced' : 'temporary';
@@ -13,10 +13,12 @@ extension RoomStatusX on RoomStatus {
   String toRaw() => switch (this) {
         RoomStatus.live => 'live',
         RoomStatus.pendingDelete => 'pending_delete',
+        RoomStatus.frozen => 'frozen',
         RoomStatus.deleted => 'deleted',
       };
   static RoomStatus fromRaw(String? r) => switch (r) {
         'pending_delete' => RoomStatus.pendingDelete,
+        'frozen' => RoomStatus.frozen,
         'deleted' => RoomStatus.deleted,
         _ => RoomStatus.live,
       };
@@ -46,6 +48,7 @@ class Room {
   final RoomStatus status;
   final DateTime? ownerLeftAt;
   final DateTime? deleteAt;
+  final DateTime? frozenAt;
 
   final int memberCount;
   final int onlineCount;
@@ -73,6 +76,7 @@ class Room {
     this.status = RoomStatus.live,
     this.ownerLeftAt,
     this.deleteAt,
+    this.frozenAt,
     this.memberCount = 1,
     this.onlineCount = 1,
     this.pinnedMessage,
@@ -84,6 +88,8 @@ class Room {
 
   bool get isAdvanced => type == RoomType.advanced;
   bool get isPendingDelete => status == RoomStatus.pendingDelete;
+  bool get isFrozen => status == RoomStatus.frozen;
+  bool get isLive => status == RoomStatus.live;
 
   factory Room.fromMap(String id, Map<String, dynamic> m) {
     DateTime? ts(dynamic v) => v is Timestamp ? v.toDate() : null;
@@ -107,6 +113,7 @@ class Room {
       status: RoomStatusX.fromRaw(m['status'] as String?),
       ownerLeftAt: ts(m['ownerLeftAt']),
       deleteAt: ts(m['deleteAt']),
+      frozenAt: ts(m['frozenAt']),
       memberCount: (m['memberCount'] ?? 1) as int,
       onlineCount: (m['onlineCount'] ?? 1) as int,
       pinnedMessage: m['pinnedMessage'] as String?,
@@ -114,8 +121,6 @@ class Room {
     );
   }
 
-  /// Used on createRoom — writes legacy creatorId too so older queries
-  /// still work during migration.
   Map<String, dynamic> toCreateMap() => {
         'name': name,
         'description': description,
