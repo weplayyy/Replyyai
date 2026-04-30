@@ -1,9 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/room.dart';
+import '../models/gift.dart';
+import '../models/app_user.dart';
 import '../services/room_service.dart';
 import '../services/active_room_service.dart';
+import '../services/user_service.dart';
+import '../services/gift_service.dart';
+import '../data/room_presets.dart';
+import '../features/rooms/models/room_message.dart';
+import '../features/rooms/models/room_member.dart';
+import '../features/rooms/models/room_role.dart';
+import '../features/rooms/widgets/room_message_bubble.dart';
+import '../features/rooms/widgets/recipient_picker_sheet.dart';
+import '../features/rooms/widgets/share_to_friends_sheet.dart';
+import 'gift_picker.dart';
+import 'gift_animation_overlay.dart';
+import 'shop_screen.dart';
+import 'user_profile_screen.dart';
 
 class RoomScreen extends StatefulWidget {
   final Room room;
@@ -17,9 +31,11 @@ class _RoomScreenState extends State<RoomScreen>
   late TabController _tab;
   final _msgC = TextEditingController();
   final _svc = RoomService();
+  final _userSvc = UserService();
+  final _giftSvc = GiftService();
   final _scroll = ScrollController();
 
-    @override
+  @override
   void initState() {
     super.initState();
     _tab = TabController(length: 4, vsync: this);
@@ -29,7 +45,82 @@ class _RoomScreenState extends State<RoomScreen>
     });
   }
 
-    Future<void> _showRoomMenu() async {
+  @override
+  void dispose() {
+    _tab.dispose();
+    _msgC.dispose();
+    _scroll.dispose();
+    ActiveRoomService.instance.setFullscreen(false);
+    super.dispose();
+  }
+
+  String get _meUid => FirebaseAuth.instance.currentUser!.uid;
+
+  Future<void> _send() async {
+    final text = _msgC.text.trim();
+    if (text.isEmpty) return;
+    _msgC.clear();
+    await _svc.sendTextMessage(widget.room.id, text);
+  }
+
+  /// One single gift flow used everywhere. Pass a recipient or null
+  /// to first prompt for a recipient via the picker.
+  Future<void> _giftFlow({String? toUid, String? toName}) async {
+    // 1) Resolve recipient
+    if (toUid == null) {
+      final picked =
+          await RecipientPickerSheet.show(context, widget.room.id);
+      if (picked == null || !mounted) return;
+      toUid = picked.uid;
+      toName = picked.displayName;
+    }
+    if (toUid == _meUid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You can\'t gift yourself 😅')));
+      return;
+    }
+
+    // 2) Fetch live coin balance
+    final me = await _userSvc.getUser(_meUid);
+    final balance = me?.coins ?? 0;
+
+    if (!mounted) return;
+
+    // 3) Open YOUR existing gift picker
+    final gift = await showGiftPicker(context, balance);
+    if (gift == null || !mounted) return;
+
+    // 4) Send via YOUR existing gift service (coins/charms/lucky/jackpot/guardian)
+    try {
+      final result = await _giftSvc.sendGiftInRoom(
+        fromUid: _meUid,
+        toUid: toUid,
+        roomId: widget.room.id,
+        gift: gift,
+      );
+
+      // 5) Play fullscreen animation if the gift has a video
+      if (gift.videoAsset != null && gift.videoAsset!.isNotEmpty) {
+        if (mounted) await playGiftAnimation(context, gift.videoAsset!);
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.jackpot
+            ? '🎉 JACKPOT! +${result.luckyCoins} lucky coins back to ${toName ?? "them"}'
+            : 'Sent ${gift.name} to ${toName ?? "them"}'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().contains('Not enough coins')
+          ? 'Not enough coins. Top up to keep gifting.'
+          : 'Error: $e';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  Future<void> _showMessageMenu(RoomMessage m) async {
+    final isOwn = m.senderId == _meUid;
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: const Color(0xFF14092B),
@@ -45,14 +136,97 @@ class _RoomScreenState extends State<RoomScreen>
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 12),
+            if (!isOwn && m.senderId.isNotEmpty && m.senderId != 'system')
+              ListTile(
+                leading: const Icon(Icons.card_giftcard,
+                    color: Color(0xFFEC4899)),
+                title: const Text('Send Gift',
+                    style: TextStyle(color: Colors.white)),
+                subtitle: Text('to ${m.senderName}',
+                    style: const TextStyle(
+                        color: Colors.white54, fontSize: 12)),
+                onTap: () => Navigator.pop(context, 'gift'),
               ),
+            if (!isOwn && m.senderId.isNotEmpty && m.senderId != 'system')
+              ListTile(
+                leading:
+                    const Icon(Icons.person_outline, color: Colors.white70),
+                title: const Text('View Profile',
+                    style: TextStyle(color: Colors.white)),
+                onTap: () => Navigator.pop(context, 'profile'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.visibility_off_outlined,
+                  color: Colors.white70),
+              title: const Text('Delete from my side',
+                  style: TextStyle(color: Colors.white)),
+              subtitle: const Text('Hide this message just for you',
+                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+              onTap: () => Navigator.pop(context, 'hide'),
+            ),
+            if (!isOwn && m.senderId != 'system')
+              ListTile(
+                leading: const Icon(Icons.flag_outlined, color: Colors.orange),
+                title: const Text('Report',
+                    style: TextStyle(color: Colors.orange)),
+                onTap: () => Navigator.pop(context, 'report'),
+              ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'gift':
+        await _giftFlow(toUid: m.senderId, toName: m.senderName);
+        break;
+      case 'profile':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => UserProfileScreen(uid: m.senderId)),
+        );
+        break;
+      case 'hide':
+        await _svc.hideMessageForMe(widget.room.id, m.id);
+        break;
+      case 'report':
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Report sent. Thank you.')));
+        }
+        break;
+    }
+  }
+
+  Future<void> _showRoomMenu() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF14092B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 8),
             ListTile(
-              leading: const Icon(Icons.minimize_rounded,
-                  color: Colors.white70),
+              leading:
+                  const Icon(Icons.minimize_rounded, color: Colors.white70),
               title: const Text('Minimize',
                   style: TextStyle(color: Colors.white)),
               subtitle: const Text(
@@ -61,8 +235,7 @@ class _RoomScreenState extends State<RoomScreen>
               onTap: () => Navigator.pop(context, 'minimize'),
             ),
             ListTile(
-              leading:
-                  const Icon(Icons.logout, color: Color(0xFFEC4899)),
+              leading: const Icon(Icons.logout, color: Color(0xFFEC4899)),
               title: const Text('Exit room',
                   style: TextStyle(color: Color(0xFFEC4899))),
               subtitle: const Text('Leave completely',
@@ -74,7 +247,6 @@ class _RoomScreenState extends State<RoomScreen>
         ),
       ),
     );
-
     if (!mounted) return;
     if (action == 'minimize') {
       Navigator.of(context).pop();
@@ -82,64 +254,59 @@ class _RoomScreenState extends State<RoomScreen>
       await ActiveRoomService.instance.exit();
       if (mounted) Navigator.of(context).pop();
     }
-    }
-  
-  @override
-  void dispose() {
-    _tab.dispose();
-    _msgC.dispose();
-    _scroll.dispose();
-    // Leaving the screen makes the bubble re-appear; membership is kept.
-    ActiveRoomService.instance.setFullscreen(false);
-    super.dispose();
-  }
-
-  Future<void> _send() async {
-    final text = _msgC.text.trim();
-    if (text.isEmpty) return;
-    _msgC.clear();
-    final me = FirebaseAuth.instance.currentUser!;
-    await _svc.sendMessage(roomId: widget.room.id, senderId: me.uid, text: text);
   }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
-  canPop: true,
-  onPopInvoked: (didPop) async {
-    if (didPop) await ActiveRoomService.instance.minimize();
-  },
-  child: Scaffold(
-    backgroundColor: const Color(0xFF0F0A1F),
-    body: SafeArea(
-      child: Column(
-          children: [
-            _header(),
-            _pinnedBanner(),
-            _tabBar(),
-            Expanded(
-              child: TabBarView(
-                controller: _tab,
-                children: [
-                  _chatTab(),
-                  _aboutTab(),
-                  _membersTab(),
-                  _leaderboardTab(),
-                ],
+      canPop: true,
+      onPopInvoked: (didPop) async {
+        if (didPop) await ActiveRoomService.instance.minimize();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0F0A1F),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _header(),
+              _pinnedBanner(),
+              _tabBar(),
+              Expanded(
+                child: TabBarView(
+                  controller: _tab,
+                  children: [
+                    _chatTab(),
+                    _aboutTab(),
+                    _membersTab(),
+                    _leaderboardTab(),
+                  ],
+                ),
               ),
-            ),
-            _inputBar(),
-            _bottomToolbar(),
-          ],
+              _inputBar(),
+              _bottomToolbar(),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 
   Widget _header() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+    final photo =
+        widget.room.photoUrl ?? RoomPresets.firstFor(widget.room.category);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: widget.room.isAdvanced
+              ? const [Color(0xFF1F0B3F), Color(0xFF3A0E5C)]
+              : const [Color(0xFF14092B), Color(0xFF1F0B3F)],
+        ),
+        border: Border(
+            bottom: BorderSide(color: Colors.white.withOpacity(0.06))),
+      ),
       child: Row(
         children: [
           GestureDetector(
@@ -157,23 +324,29 @@ class _RoomScreenState extends State<RoomScreen>
           ),
           const SizedBox(width: 10),
           Container(
-            width: 42,
-            height: 42,
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               gradient: const LinearGradient(
                   colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
               boxShadow: [
                 BoxShadow(
                     color: const Color(0xFFEC4899).withOpacity(0.5),
-                    blurRadius: 14),
+                    blurRadius: 14)
               ],
+              image: DecorationImage(
+                image: AssetImage(photo),
+                fit: BoxFit.cover,
+                onError: (_, __) {},
+              ),
+              border: widget.room.isAdvanced
+                  ? Border.all(
+                      color: const Color(0xFFFBBF24), width: 2)
+                  : null,
             ),
-            alignment: Alignment.center,
-            child: Text(widget.room.emoji,
-                style: const TextStyle(fontSize: 22)),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,305 +362,204 @@ class _RoomScreenState extends State<RoomScreen>
                               fontWeight: FontWeight.bold,
                               fontSize: 16)),
                     ),
+                    if (widget.room.isAdvanced) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [
+                            Color(0xFFFBBF24),
+                            Color(0xFFF59E0B)
+                          ]),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.diamond,
+                                color: Colors.white, size: 10),
+                            const SizedBox(width: 3),
+                            Text('Lv ${widget.room.level}',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
+                const SizedBox(height: 2),
                 Row(
                   children: [
-                    Text(
-                        'ID: ${widget.room.id.isEmpty ? "—" : widget.room.id.substring(0, widget.room.id.length.clamp(0, 6))}',
-                        style: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
-                            fontSize: 11)),
-                    const SizedBox(width: 6),
-                    Container(
-                        width: 4,
-                        height: 4,
-                        decoration: BoxDecoration(
-                            color: Colors.white24, shape: BoxShape.circle)),
-                    const SizedBox(width: 6),
                     Container(
                       width: 6,
                       height: 6,
                       decoration: const BoxDecoration(
-                          color: Color(0xFF22C55E),
-                          shape: BoxShape.circle),
+                          color: Color(0xFF22C55E), shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 4),
-                    Text('${widget.room.onlineCount} Online',
+                    Text('${widget.room.onlineCount} online',
                         style: const TextStyle(
                             color: Color(0xFF22C55E), fontSize: 11)),
+                    const SizedBox(width: 8),
+                    Text('• ${widget.room.category}',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 11)),
                   ],
                 ),
               ],
             ),
           ),
-          _iconBtn(Icons.share_rounded, () {}),
+          _coinPill(),
           const SizedBox(width: 6),
-          _iconBtn(Icons.notifications_outlined, () {}, dot: true),
+          _iconBtn(Icons.share_rounded,
+              () => ShareToFriendsSheet.show(context, widget.room)),
           const SizedBox(width: 6),
-          _iconBtn(Icons.more_horiz, () => _showRoomMenu()),
+          _iconBtn(Icons.more_horiz, _showRoomMenu),
         ],
       ),
     );
   }
 
-  Widget _iconBtn(IconData ic, VoidCallback onTap, {bool dot = false}) {
+  /// Live coin balance pill — taps to your existing shop.
+  Widget _coinPill() {
+    return StreamBuilder<AppUser>(
+      stream: _userSvc.watchUser(_meUid),
+      builder: (_, snap) {
+        final coins = snap.data?.coins ?? 0;
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ShopScreen()),
+          ),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(8, 5, 5, 5),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: [
+                      Color(0xFFFFD86B),
+                      Color(0xFFF59E0B)
+                    ]),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    '\$',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  coins.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.add, color: Colors.white70, size: 14),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _iconBtn(IconData icon, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: Stack(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(ic, color: Colors.white, size: 16),
-          ),
-          if (dot)
-            Positioned(
-              right: 6,
-              top: 6,
-              child: Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF8B5CF6),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-        ],
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: Colors.white, size: 18),
       ),
     );
   }
 
   Widget _pinnedBanner() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF8B5CF6).withOpacity(0.12),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: const Color(0xFF8B5CF6).withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            const Text('📌', style: TextStyle(fontSize: 16)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: const [
-                      Text('Pinned',
-                          style: TextStyle(
-                              color: Color(0xFFB794F6),
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold)),
-                      SizedBox(width: 4),
-                      Icon(Icons.verified,
-                          color: Color(0xFF8B5CF6), size: 12),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    widget.room.description.isEmpty
-                        ? 'Be kind, be real, and respect everyone here 💜'
-                        : widget.room.description,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 13, height: 1.3),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: Colors.white54, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
+    if (widget.room.pinnedMessage == null) return const SizedBox.shrink();
 
-  Widget _tabBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-      child: TabBar(
-        controller: _tab,
-        isScrollable: true,
-        indicatorColor: const Color(0xFF8B5CF6),
-        indicatorWeight: 2.5,
-        labelColor: Colors.white,
-        unselectedLabelColor: Colors.white54,
-        labelStyle:
-            const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-        unselectedLabelStyle: const TextStyle(fontSize: 13),
-        tabs: [
-          const Tab(text: 'Chat'),
-          const Tab(text: 'About'),
-          Tab(text: 'Members ${widget.room.onlineCount}'),
-          const Tab(text: 'Leaderboard'),
+    return Container(
+      margin: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6D28D9), Color(0xFF9333EA)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.push_pin, color: Colors.white),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              widget.room.pinnedMessage!,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
         ],
       ),
     );
   }
 
+  Widget _tabBar() {
+    return TabBar(
+      controller: _tab,
+      indicatorColor: const Color(0xFF8B5CF6),
+      tabs: const [
+        Tab(text: "Chat"),
+        Tab(text: "About"),
+        Tab(text: "Members"),
+        Tab(text: "Top"),
+      ],
+    );
+  }
+
+  // ================= CHAT =================
+
   Widget _chatTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
+    return StreamBuilder<List<RoomMessage>>(
       stream: _svc.watchMessages(widget.room.id),
       builder: (_, snap) {
-        if (snap.hasError) {
-          return Center(
-              child: Text('Error: ${snap.error}',
-                  style: const TextStyle(color: Colors.white70)));
-        }
-        if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final msgs = snap.data!;
-        if (msgs.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'No messages yet.\nBe the first to say hi 👋',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.5), fontSize: 14),
-              ),
-            ),
-          );
-        }
+        final messages = snap.data ?? [];
+
         return ListView.builder(
           controller: _scroll,
-          reverse: true,
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          itemCount: msgs.length,
-          itemBuilder: (_, i) => _messageBubble(msgs[i]),
-        );
-      },
-    );
-  }
-
-  Widget _messageBubble(Map<String, dynamic> m) {
-    final senderId = m['senderId'] as String? ?? '';
-    final text = m['text'] as String? ?? '';
-    final ts = m['createdAt'] as Timestamp?;
-
-    final me = FirebaseAuth.instance.currentUser?.uid;
-    final isMe = senderId == me;
-
-    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      future: FirebaseFirestore.instance
-          .collection('users')
-          .doc(senderId)
-          .get(),
-      builder: (context, snap) {
-        final user = snap.data?.data();
-        final name = user?['name'] ?? 'User';
-        final avatar = user?['avatar'] ?? '';
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            mainAxisAlignment:
-                isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!isMe) _avatar(avatar),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: isMe
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
-                  children: [
-                    if (!isMe)
-                      Text(name,
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 11)),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: isMe
-                            ? const Color(0xFF8B5CF6)
-                            : Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(text,
-                          style: const TextStyle(color: Colors.white)),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      ts != null
-                          ? TimeOfDay.fromDateTime(ts.toDate())
-                              .format(context)
-                          : '',
-                      style: const TextStyle(
-                          color: Colors.white38, fontSize: 10),
-                    ),
-                  ],
-                ),
-              ),
-              if (isMe) const SizedBox(width: 8),
-              if (isMe) _avatar(avatar),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _avatar(String url) {
-    return CircleAvatar(
-      radius: 14,
-      backgroundColor: Colors.white24,
-      backgroundImage: url.isNotEmpty ? NetworkImage(url) : null,
-      child: url.isEmpty
-          ? const Icon(Icons.person, size: 14, color: Colors.white)
-          : null,
-    );
-  }
-
-  Widget _aboutTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Text(
-        widget.room.description.isEmpty
-            ? 'No description available'
-            : widget.room.description,
-        style: const TextStyle(color: Colors.white70),
-      ),
-    );
-  }
-
-  Widget _membersTab() {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('rooms')
-          .doc(widget.room.id)
-          .collection('members')
-          .snapshots(),
-      builder: (_, snap) {
-        if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final docs = snap.data!.docs;
-
-        return ListView.builder(
-          itemCount: docs.length,
+          padding: const EdgeInsets.all(10),
+          itemCount: messages.length,
           itemBuilder: (_, i) {
-            final data = docs[i].data();
-            final name = data['name'] ?? 'User';
+            final m = messages[i];
 
-            return ListTile(
-              title: Text(name,
-                  style: const TextStyle(color: Colors.white)),
-              leading: const CircleAvatar(
-                child: Icon(Icons.person),
+            return GestureDetector(
+              onLongPress: () => _showMessageMenu(m),
+              child: RoomMessageBubble(
+                message: m,
+                isMe: m.senderId == _meUid,
               ),
             );
           },
@@ -496,19 +568,65 @@ class _RoomScreenState extends State<RoomScreen>
     );
   }
 
-  Widget _leaderboardTab() {
-    return const Center(
+  // ================= ABOUT =================
+
+  Widget _aboutTab() {
+    return Center(
       child: Text(
-        'Leaderboard coming soon',
-        style: TextStyle(color: Colors.white54),
+        "Room Info",
+        style: TextStyle(color: Colors.white.withOpacity(0.6)),
       ),
     );
   }
 
+  // ================= MEMBERS =================
+
+  Widget _membersTab() {
+    return StreamBuilder<List<RoomMember>>(
+      stream: _svc.watchMembers(widget.room.id),
+      builder: (_, snap) {
+        final members = snap.data ?? [];
+
+        return ListView.builder(
+          itemCount: members.length,
+          itemBuilder: (_, i) {
+            final m = members[i];
+
+            return ListTile(
+              leading: CircleAvatar(child: Text(m.name[0])),
+              title: Text(m.name,
+                  style: const TextStyle(color: Colors.white)),
+              subtitle: Text(m.role.name,
+                  style: const TextStyle(color: Colors.white54)),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ================= LEADERBOARD =================
+
+  Widget _leaderboardTab() {
+    return Center(
+      child: Text(
+        "Leaderboard Coming Soon",
+        style: TextStyle(color: Colors.white.withOpacity(0.6)),
+      ),
+    );
+  }
+
+  // ================= INPUT =================
+
   Widget _inputBar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-      color: const Color(0xFF140D2A),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
+        border: Border(
+          top: BorderSide(color: Colors.white.withOpacity(0.05)),
+        ),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -516,18 +634,20 @@ class _RoomScreenState extends State<RoomScreen>
               controller: _msgC,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                hintText: 'Type message...',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none),
+                hintText: "Type message...",
+                hintStyle:
+                    TextStyle(color: Colors.white.withOpacity(0.4)),
+                border: InputBorder.none,
               ),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.send, color: Color(0xFF8B5CF6)),
+            icon: const Icon(Icons.card_giftcard,
+                color: Color(0xFFEC4899)),
+            onPressed: () => _giftFlow(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.send, color: Colors.white),
             onPressed: _send,
           ),
         ],
@@ -535,23 +655,36 @@ class _RoomScreenState extends State<RoomScreen>
     );
   }
 
+  // ================= BOTTOM TOOLBAR =================
+
   Widget _bottomToolbar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      color: const Color(0xFF0F0A1F),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.5),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _tool(Icons.mic),
-          _tool(Icons.card_giftcard),
-          _tool(Icons.emoji_emotions),
-          _tool(Icons.more_horiz),
+          _tool(Icons.mic, "Mic"),
+          _tool(Icons.emoji_emotions, "Emoji"),
+          _tool(Icons.games, "Games"),
+          _tool(Icons.card_giftcard, "Gift"),
         ],
       ),
     );
   }
 
-  Widget _tool(IconData icon) {
-    return Icon(icon, color: Colors.white70, size: 22);
+  Widget _tool(IconData icon, String label) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: Colors.white70, size: 22),
+        const SizedBox(height: 2),
+        Text(label,
+            style: const TextStyle(
+                color: Colors.white54, fontSize: 10)),
+      ],
+    );
   }
 }
