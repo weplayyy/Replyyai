@@ -55,6 +55,19 @@ class _RoomScreenState extends State<RoomScreen>
 
   String get _meUid => FirebaseAuth.instance.currentUser!.uid;
 
+    Future<void> _send() async {
+    final text = _msgC.text.trim();
+    if (text.isEmpty) return;
+    _msgC.clear();
+    try {
+      await _svc.sendTextMessage(widget.room.id, text);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+    }
+  
   Future<void> _send() async {
     final text = _msgC.text.trim();
     if (text.isEmpty) return;
