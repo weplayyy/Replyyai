@@ -26,3 +26,4 @@ flutter:
   assets:
     - assets/logo.png
     - assets/gifts/
+    - assets/rooms/
