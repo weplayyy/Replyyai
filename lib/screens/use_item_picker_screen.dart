@@ -74,7 +74,7 @@ class _UseItemPickerScreenState extends State<UseItemPickerScreen> {
                   );
                 }
                 final users = snap.data!.docs
-                    .map((d) => AppUser.fromMap(d.id, d.data()))
+                    .map((d) => AppUser.fromMap(d.data(), d.id))
                     .where((u) => u.uid != _myUid)
                     .where((u) => _query.isEmpty
                         ? true
