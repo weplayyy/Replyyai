@@ -6,6 +6,8 @@ import '../../models/app_user.dart';
 import '../../services/user_service.dart';
 import '../chat_screen.dart';
 import 'friends_tab.dart';
+import '../../widgets/rank_badge.dart';
+import '../../widgets/rank_avatar_frame.dart';
 
 class DiscoverTab extends StatefulWidget {
   const DiscoverTab({super.key});
