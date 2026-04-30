@@ -269,8 +269,21 @@ class RoomService {
   }) =>
       sendTextMessage(roomId, text);
 
-  Future<void> sendTextMessage(String roomId, String text) async {
+    Future<void> sendTextMessage(String roomId, String text) async {
     if (text.trim().isEmpty) return;
+
+    // Mute check — block sending if mutedUntil is in the future.
+    final myMemberDoc = await _rooms
+        .doc(roomId)
+        .collection('members')
+        .doc(_me)
+        .get();
+    final mutedUntilTs = myMemberDoc.data()?['mutedUntil'];
+    if (mutedUntilTs is Timestamp &&
+        mutedUntilTs.toDate().isAfter(DateTime.now())) {
+      throw Exception('You are muted in this room');
+    }
+
     final me = await _db.collection('users').doc(_me).get();
     final m = me.data() ?? {};
     await _rooms.doc(roomId).collection('messages').add({
@@ -283,7 +296,7 @@ class RoomService {
       'hiddenFor': <String>[],
       'createdAt': FieldValue.serverTimestamp(),
     });
-  }
+    }
 
   /// Append my uid to a message's hiddenFor — invisible only to me.
   Future<void> hideMessageForMe(String roomId, String messageId) {
