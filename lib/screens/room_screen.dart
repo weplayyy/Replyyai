@@ -34,13 +34,18 @@ class _RoomScreenState extends State<RoomScreen>
   final _giftSvc = GiftService();
   final _scroll = ScrollController();
 
-  @override
+    @override
   void initState() {
     super.initState();
     _tab = TabController(length: 4, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ActiveRoomService.instance.enter(widget.room);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ActiveRoomService.instance.enter(widget.room);
       ActiveRoomService.instance.setFullscreen(true);
+      // Any moderator (owner / co_owner / admin) returning unfreezes
+      // the room or cancels the 3-min owner-leave countdown.
+      try {
+        await _svc.modReturnRoom(widget.room.id);
+      } catch (_) {}
     });
   }
 
@@ -55,12 +60,23 @@ class _RoomScreenState extends State<RoomScreen>
 
   String get _meUid => FirebaseAuth.instance.currentUser!.uid;
   
-  Future<void> _send() async {
+    Future<void> _send() async {
     final text = _msgC.text.trim();
     if (text.isEmpty) return;
     _msgC.clear();
-    await _svc.sendTextMessage(widget.room.id, text);
-  }
+    try {
+      await _svc.sendTextMessage(widget.room.id, text);
+    } catch (e) {
+      if (mounted) {
+        final raw = e.toString();
+        final clean = raw.startsWith('Exception: ')
+            ? raw.substring('Exception: '.length)
+            : raw;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(clean)));
+      }
+    }
+    }
 
   void _openProfile(String uid) {
     if (uid.isEmpty || uid == 'system') return;
@@ -245,11 +261,24 @@ class _RoomScreenState extends State<RoomScreen>
         ),
       ),
     );
-    if (!mounted) return;
+        if (!mounted) return;
     if (action == 'minimize') {
       Navigator.of(context).pop();
     } else if (action == 'exit') {
-      await ActiveRoomService.instance.exit();
+      final isOwner = _meUid == widget.room.ownerId;
+      if (isOwner) {
+        try {
+          await _svc.ownerLeaveRoom(widget.room.id);
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to exit: $e')));
+          }
+        }
+        await ActiveRoomService.instance.clear();
+      } else {
+        await ActiveRoomService.instance.exit();
+      }
       if (mounted) Navigator.of(context).pop();
     }
   }
@@ -293,6 +322,7 @@ class _RoomScreenState extends State<RoomScreen>
                     ],
                   ),
                 ),
+                                _ownerLeftBanner(),
                 _inputBar(),
                 _bottomToolbar(),
               ],
@@ -1009,6 +1039,67 @@ class _RoomScreenState extends State<RoomScreen>
         "Leaderboard coming soon",
         style: TextStyle(color: Colors.white.withOpacity(0.6)),
       ),
+    );
+  }
+
+  // ================= INPUT =================
+
+    // ================= OWNER-LEFT / FROZEN BANNER =================
+
+  Widget _ownerLeftBanner() {
+    return StreamBuilder<Room?>(
+      stream: _svc.watchRoom(widget.room.id),
+      builder: (_, snap) {
+        final room = snap.data;
+        if (room == null) return const SizedBox.shrink();
+
+        // Auto-delete trigger for expired temporary rooms.
+        if (room.isPendingDelete &&
+            room.deleteAt != null &&
+            room.deleteAt!.isBefore(DateTime.now())) {
+          _svc.autoDeleteIfExpired(room.id).then((deleted) async {
+            if (deleted && mounted) {
+              await ActiveRoomService.instance.clear();
+              if (mounted) Navigator.of(context).pop();
+            }
+          });
+        }
+
+        if (room.isPendingDelete && room.deleteAt != null) {
+          final amOwner = _meUid == room.ownerId;
+          return _CountdownBanner(
+            deleteAt: room.deleteAt!,
+            showReturnButton: amOwner,
+            onReturn: () async {
+              try {
+                await _svc.modReturnRoom(room.id);
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed: $e')));
+                }
+              }
+            },
+          );
+        }
+
+        if (room.isFrozen) {
+          return _FrozenBanner(
+            onUnfreeze: () async {
+              try {
+                await _svc.modReturnRoom(room.id);
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to unfreeze: $e')));
+                }
+              }
+            },
+          );
+        }
+
+        return const SizedBox.shrink();
+      },
     );
   }
 
