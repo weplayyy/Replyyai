@@ -67,40 +67,44 @@ class _GiftAnimationOverlayState extends State<_GiftAnimationOverlay> {
   }
 
   @override
-Widget build(BuildContext context) {
-  return GestureDetector(
-    onTap: () => Navigator.of(context).maybePop(),
-    child: Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Center(
-        child: _error != null
-            ? Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'Video error:\n${widget.asset}\n\n$_error',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white),
-                ),
-              )
-            : _ready
-                ? LayoutBuilder(
-                    builder: (context, c) {
-                      final ar = _ctrl.value.aspectRatio;
-                      final safeAr = (ar.isFinite && ar > 0) ? ar : 9 / 16;
-                      return FittedBox(
-                        fit: BoxFit.contain,
-                        child: SizedBox(
-                          width: _ctrl.value.size.width  > 0
-                              ? _ctrl.value.size.width  : 720,
-                          height: _ctrl.value.size.height > 0
-                              ? _ctrl.value.size.height : (720 / safeAr),
-                          child: VideoPlayer(_ctrl),
-                        ),
-                      );
-                    },
-                  )
-                : const CircularProgressIndicator(color: Colors.white),
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).maybePop(),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(
+          child: _error != null
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Video error:\n${widget.asset}\n\n$_error',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                )
+              : _ready
+                  ? LayoutBuilder(
+                      builder: (context, c) {
+                        final ar = _ctrl.value.aspectRatio;
+                        final safeAr =
+                            (ar.isFinite && ar > 0) ? ar : 9 / 16;
+                        return FittedBox(
+                          fit: BoxFit.contain,
+                          child: SizedBox(
+                            width: _ctrl.value.size.width > 0
+                                ? _ctrl.value.size.width
+                                : 720,
+                            height: _ctrl.value.size.height > 0
+                                ? _ctrl.value.size.height
+                                : (720 / safeAr),
+                            child: VideoPlayer(_ctrl),
+                          ),
+                        );
+                      },
+                    )
+                  : const CircularProgressIndicator(color: Colors.white),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
