@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/room.dart';
 import '../../services/room_service.dart';
 import '../room_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../data/room_presets.dart';
 
 const List<Map<String, dynamic>> kRoomCategories = [
   {'name': 'All', 'icon': Icons.grid_view_rounded, 'emoji': null},
