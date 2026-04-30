@@ -46,17 +46,15 @@ jobs:
 
       - name: Clean stray files in assets/gifts
         run: |
-          # Remove the stray 1-byte "a" file if it exists
           [ -f assets/gifts/a ] && rm -f assets/gifts/a || true
-          # Remove any leftover _src dir from a previous run
           rm -rf assets/gifts/_src
           ls -lh assets/gifts/ || true
 
       - name: Probe original gift videos (before re-encode)
         run: |
           echo "=========== ORIGINAL FILES ==========="
+          shopt -s nullglob
           for f in assets/gifts/*.mp4; do
-            [ -f "$f" ] || continue
             echo "----- $f -----"
             ffprobe -v error -show_entries \
               stream=index,codec_type,codec_name,profile,pix_fmt,width,height,r_frame_rate,duration \
@@ -72,7 +70,7 @@ jobs:
             mv "$f" "assets/gifts/_src/$name"
 
             ffmpeg -y -i "assets/gifts/_src/$name" \
-              -map 0:v:0 -map 0:a:0? \
+              -map '0:v:0' -map '0:a:0?' \
               -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p \
               -preset veryfast -crf 23 \
               -vf "scale='min(720,iw)':-2:force_original_aspect_ratio=decrease,fps=30,format=yuv420p" \
@@ -92,9 +90,9 @@ jobs:
 
       - name: Fail build if any gift video is invalid
         run: |
+          shopt -s nullglob
           bad=0
           for f in assets/gifts/*.mp4; do
-            [ -f "$f" ] || continue
             dur=$(ffprobe -v error -select_streams v:0 \
               -show_entries stream=duration -of default=nw=1:nk=1 "$f")
             pix=$(ffprobe -v error -select_streams v:0 \
