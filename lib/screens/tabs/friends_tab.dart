@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/user_service.dart';
 import '../../models/app_user.dart';
+import '../../widgets/rank_badge.dart';
 import '../chat_screen.dart';
 
 class FriendsTab extends StatelessWidget {
@@ -36,18 +37,17 @@ class FriendsTab extends StatelessWidget {
                 final list = snap.data!;
                 if (list.isEmpty) {
                   return Center(
-                    child: Text('No other users yet.\nInvite a friend to sign up!',
+                    child: Text(
+                        'No other users yet.\nInvite a friend to sign up!',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white.withOpacity(0.6))),
+                        style:
+                            TextStyle(color: Colors.white.withOpacity(0.6))),
                   );
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: list.length,
-                  itemBuilder: (_, i) {
-                    final u = list[i];
-                    return _userTile(context, u);
-                  },
+                  itemBuilder: (_, i) => _userTile(context, list[i]),
                 );
               },
             ),
@@ -66,28 +66,34 @@ class FriendsTab extends StatelessWidget {
         border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         leading: _avatar(u),
         title: Text(u.displayName,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-        subtitle: Row(children: [
-          const Icon(Icons.favorite, size: 12, color: Color(0xFFEC4899)),
-          const SizedBox(width: 4),
-          Text('${u.charms}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                    colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
-                borderRadius: BorderRadius.circular(6)),
-            child: Text('Lv ${u.level}',
-                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w600)),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            children: [
+              const Icon(Icons.favorite,
+                  size: 12, color: Color(0xFFEC4899)),
+              const SizedBox(width: 4),
+              Text('${u.charms}',
+                  style: const TextStyle(
+                      color: Colors.white60, fontSize: 12)),
+              const SizedBox(width: 8),
+              Flexible(
+                child: RankBadge(
+                    charms: u.charms, scale: 0.85, showName: false),
+              ),
+            ],
           ),
-        ]),
-        trailing: const Icon(Icons.chat_bubble_outline, color: Color(0xFFEC4899)),
-        onTap: () => Navigator.push(
-            context, MaterialPageRoute(builder: (_) => ChatScreen(other: u))),
+        ),
+        trailing: const Icon(Icons.chat_bubble_outline,
+            color: Color(0xFFEC4899)),
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => ChatScreen(other: u))),
       ),
     );
   }
@@ -105,7 +111,9 @@ class FriendsTab extends StatelessWidget {
         child: Text(
           u.displayName.isNotEmpty ? u.displayName[0].toUpperCase() : '?',
           style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 18),
         ),
       ),
     );
