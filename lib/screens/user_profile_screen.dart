@@ -823,7 +823,12 @@ class UserProfileScreen extends StatelessWidget {
           icon: Icons.card_giftcard,
           onTap: () async {
             final me = FirebaseAuth.instance.currentUser!;
-            final picked = await showGiftPicker(context);
+                        final mySnap = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(me.uid)
+                .get();
+            final myBalance = (mySnap.data()?['coins'] ?? 0) as int;
+            final picked = await showGiftPicker(context, myBalance);
             if (picked == null) return;
             await GiftService().sendGift(
                 fromUid: me.uid, toUid: u.uid, gift: picked);
@@ -837,7 +842,7 @@ class UserProfileScreen extends StatelessWidget {
           width: 64,
           onTap: () {
             Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => ChatScreen(otherUid: u.uid),
+                            builder: (_) => ChatScreen(other: u),
             ));
           },
         ),
