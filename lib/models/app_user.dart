@@ -7,7 +7,7 @@ class AppUser {
   final String? photoURL;
   final String username;
   final String bio;
-  final int charms;
+  final int charms; // displayed as "Guard Points"
   final int level;
   final int coins;
   final int friendsCount;
@@ -17,6 +17,15 @@ class AppUser {
   final bool isOnline;
   final bool isVerified;
   final Timestamp? createdAt;
+
+  // NEW
+  final String? signature;
+  final String? clanId;
+  final String? clanName;
+  final String? clanRole; // 'Leader' / 'Co-Leader' / 'Member'
+  final String? cpPartnerUid;
+  final String? cpPartnerName;
+  final DateTime? cpSince;
 
   AppUser({
     required this.uid,
@@ -35,6 +44,13 @@ class AppUser {
     this.isOnline = true,
     this.isVerified = false,
     this.createdAt,
+    this.signature,
+    this.clanId,
+    this.clanName,
+    this.clanRole,
+    this.cpPartnerUid,
+    this.cpPartnerName,
+    this.cpSince,
   });
 
   factory AppUser.fromMap(Map<String, dynamic> m) => AppUser(
@@ -54,5 +70,12 @@ class AppUser {
         isOnline: m['isOnline'] ?? true,
         isVerified: m['isVerified'] ?? false,
         createdAt: m['createdAt'],
+        signature: m['signature'] as String?,
+        clanId: m['clanId'] as String?,
+        clanName: m['clanName'] as String?,
+        clanRole: m['clanRole'] as String?,
+        cpPartnerUid: m['cpPartnerUid'] as String?,
+        cpPartnerName: m['cpPartnerName'] as String?,
+        cpSince: (m['cpSince'] as Timestamp?)?.toDate(),
       );
 }
