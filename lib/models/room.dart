@@ -50,6 +50,9 @@ class Room {
   final int memberCount;
   final int onlineCount;
 
+  /// Pinned banner shown at the top of the chat. Null/empty = no pin.
+  final String? pinnedMessage;
+
   final DateTime? createdAt;
 
   Room({
@@ -72,6 +75,7 @@ class Room {
     this.deleteAt,
     this.memberCount = 1,
     this.onlineCount = 1,
+    this.pinnedMessage,
     this.createdAt,
   });
 
@@ -105,6 +109,7 @@ class Room {
       deleteAt: ts(m['deleteAt']),
       memberCount: (m['memberCount'] ?? 1) as int,
       onlineCount: (m['onlineCount'] ?? 1) as int,
+      pinnedMessage: m['pinnedMessage'] as String?,
       createdAt: ts(m['createdAt']),
     );
   }
@@ -129,6 +134,7 @@ class Room {
         'status': status.toRaw(),
         'memberCount': memberCount,
         'onlineCount': onlineCount,
+        'pinnedMessage': pinnedMessage,
         'createdAt': FieldValue.serverTimestamp(),
       };
 }
