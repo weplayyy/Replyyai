@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/room.dart';
 import '../services/room_service.dart';
+import '../services/active_room_service.dart';
 
 class RoomScreen extends StatefulWidget {
   final Room room;
@@ -18,17 +19,78 @@ class _RoomScreenState extends State<RoomScreen>
   final _svc = RoomService();
   final _scroll = ScrollController();
 
-  @override
+    @override
   void initState() {
     super.initState();
     _tab = TabController(length: 4, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ActiveRoomService.instance.enter(widget.room);
+      ActiveRoomService.instance.setFullscreen(true);
+    });
   }
 
+    Future<void> _showRoomMenu() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF14092B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.minimize_rounded,
+                  color: Colors.white70),
+              title: const Text('Minimize',
+                  style: TextStyle(color: Colors.white)),
+              subtitle: const Text(
+                  'Stay in room — show as floating bubble',
+                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+              onTap: () => Navigator.pop(context, 'minimize'),
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.logout, color: Color(0xFFEC4899)),
+              title: const Text('Exit room',
+                  style: TextStyle(color: Color(0xFFEC4899))),
+              subtitle: const Text('Leave completely',
+                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+              onTap: () => Navigator.pop(context, 'exit'),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    if (action == 'minimize') {
+      Navigator.of(context).pop();
+    } else if (action == 'exit') {
+      await ActiveRoomService.instance.exit();
+      if (mounted) Navigator.of(context).pop();
+    }
+    }
+  
   @override
   void dispose() {
     _tab.dispose();
     _msgC.dispose();
     _scroll.dispose();
+    // Leaving the screen makes the bubble re-appear; membership is kept.
+    ActiveRoomService.instance.setFullscreen(false);
     super.dispose();
   }
 
@@ -42,10 +104,15 @@ class _RoomScreenState extends State<RoomScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F0A1F),
-      body: SafeArea(
-        child: Column(
+    return PopScope(
+  canPop: true,
+  onPopInvoked: (didPop) async {
+    if (didPop) await ActiveRoomService.instance.minimize();
+  },
+  child: Scaffold(
+    backgroundColor: const Color(0xFF0F0A1F),
+    body: SafeArea(
+      child: Column(
           children: [
             _header(),
             _pinnedBanner(),
@@ -157,7 +224,7 @@ class _RoomScreenState extends State<RoomScreen>
           const SizedBox(width: 6),
           _iconBtn(Icons.notifications_outlined, () {}, dot: true),
           const SizedBox(width: 6),
-          _iconBtn(Icons.more_horiz, () {}),
+          _iconBtn(Icons.more_horiz, () => _showRoomMenu()),
         ],
       ),
     );
