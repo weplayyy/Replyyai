@@ -11,7 +11,6 @@ import '../data/room_presets.dart';
 import '../features/rooms/models/room_message.dart';
 import '../features/rooms/models/room_member.dart';
 import '../features/rooms/models/room_role.dart';
-import '../features/rooms/widgets/room_message_bubble.dart';
 import '../features/rooms/widgets/recipient_picker_sheet.dart';
 import '../features/rooms/widgets/share_to_friends_sheet.dart';
 import 'gift_picker.dart';
