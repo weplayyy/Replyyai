@@ -395,7 +395,7 @@ class _DiscoverTabState extends State<DiscoverTab> {
     );
   }
 
-  Widget _podiumAvatar(AppUser u, int rank, bool isFirst) {
+    Widget _podiumAvatar(AppUser u, int rank, bool isFirst) {
     final ringColor = rank == 1
         ? const Color(0xFFFFD24A)
         : (rank == 2 ? const Color(0xFF7BB7FF) : const Color(0xFFE6926B));
@@ -404,23 +404,15 @@ class _DiscoverTabState extends State<DiscoverTab> {
       alignment: Alignment.bottomRight,
       clipBehavior: Clip.none,
       children: [
-        Container(
-          padding: const EdgeInsets.all(2.5),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: ringColor, width: 2.4),
-            boxShadow: [
-              BoxShadow(
-                  color: ringColor.withOpacity(0.45), blurRadius: 10),
-            ],
-          ),
+        RankAvatarFrame(
+          charms: u.charms,
+          size: radius * 2,
           child: CircleAvatar(
             radius: radius,
             backgroundColor: Colors.white12,
-            backgroundImage:
-                (u.photoURL != null && u.photoURL!.isNotEmpty)
-                    ? NetworkImage(u.photoURL!)
-                    : null,
+            backgroundImage: (u.photoURL != null && u.photoURL!.isNotEmpty)
+                ? NetworkImage(u.photoURL!)
+                : null,
             child: (u.photoURL == null || u.photoURL!.isEmpty)
                 ? Text(
                     u.displayName.isNotEmpty
