@@ -9,6 +9,8 @@ import 'room_service.dart';
 /// - minimize() : back-press leaves screen but stays in room (present=false)
 /// - resume()   : tap the bubble to come back (present=true)
 /// - exit()     : Exit button → fully leaves and removes the bubble
+/// - clear()    : drop the active room WITHOUT calling leaveRoom (used by
+///                the owner-leave flow which manages membership itself)
 class ActiveRoomService extends ChangeNotifier {
   ActiveRoomService._();
   static final ActiveRoomService instance = ActiveRoomService._();
@@ -64,5 +66,15 @@ class ActiveRoomService extends ChangeNotifier {
     try {
       await RoomService().leaveRoom(id);
     } catch (_) {}
+  }
+
+  /// Clear the active room without calling leaveRoom — used when the
+  /// owner-exit flow has already handled membership state itself
+  /// (frozen / pending_delete cases keep the owner as a member so
+  /// they can return).
+  Future<void> clear() async {
+    _room = null;
+    _fullscreen = false;
+    notifyListeners();
   }
 }
