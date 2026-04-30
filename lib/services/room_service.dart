@@ -45,11 +45,42 @@ class RoomService {
         (s) => s.exists ? Room.fromMap(s.id, s.data()!) : null);
   }
 
-    // ---------------------------------------------------------------------------
+  /// Creates a room AND adds the creator as the OWNER member in one batch.
+  Future<String> createRoom(Room room) async {
+    final ref = _rooms.doc();
+    final me = await _db.collection('users').doc(_me).get();
+    final m = me.data() ?? {};
+
+    final batch = _db.batch();
+    batch.set(ref, room.toCreateMap());
+    batch.set(ref.collection('members').doc(_me), {
+      'uid': _me,
+      'displayName': m['displayName'] ?? 'Owner',
+      'photoUrl': m['photoURL'],
+      'charms': m['charms'] ?? 0,
+      'role': RoomRole.owner.toRaw(),
+      'joinedAt': FieldValue.serverTimestamp(),
+      'isPresent': true,
+      'lastActiveAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return ref.id;
+  }
+
+  /// Soft delete — flips status. Cleanup of subcollections happens via
+  /// the scheduled function (Slice 5).
+  Future<void> deleteRoom(String roomId) async {
+    await _rooms.doc(roomId).update({
+      'status': 'deleted',
+      'deletedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // MODERATION — kick / mute / promote / demote.
   // Charm rule is enforced at the call site (see ManageMemberSheet); these
-  // methods just do the writes. Firestore Security Rules should also enforce
-  // the rule server-side (see comment block at the bottom of this file).
+  // methods just do the writes. Firestore Security Rules also enforce
+  // the rule server-side.
   // ---------------------------------------------------------------------------
 
   /// Hard-remove a member doc and decrement counters.
@@ -95,35 +126,129 @@ class RoomService {
     });
   }
 
-  /// Creates a room AND adds the creator as the OWNER member in one batch.
-  Future<String> createRoom(Room room) async {
-    final ref = _rooms.doc();
-    final me = await _db.collection('users').doc(_me).get();
-    final m = me.data() ?? {};
+  // ---------------------------------------------------------------------------
+  // OWNER LIFECYCLE — leave / return / freeze / auto-delete countdown
+  // ---------------------------------------------------------------------------
 
+  /// Owner taps "Exit" on a room.
+  ///
+  /// - Temporary room → 3-min countdown then auto-delete.
+  /// - Advanced room with other moderators present → owner just leaves,
+  ///   room stays live (admins keep it going).
+  /// - Advanced room with no other moderators → status flips to `frozen`
+  ///   (no one can chat) until any moderator returns. Never deletes.
+  ///
+  /// Returns true if the room is still chattable, false if it was put into
+  /// pending_delete or frozen state.
+  Future<bool> ownerLeaveRoom(String roomId) async {
+    final roomSnap = await _rooms.doc(roomId).get();
+    if (!roomSnap.exists) return false;
+    final room = Room.fromMap(roomSnap.id, roomSnap.data()!);
+
+    final modsSnap = await _rooms
+        .doc(roomId)
+        .collection('members')
+        .where('role', whereIn: ['co_owner', 'admin']).get();
+    final hasOtherMods = modsSnap.docs.any((d) => d.id != _me);
+
+    if (room.isAdvanced && hasOtherMods) {
+      // Advanced room with mods present → owner just leaves; room continues.
+      await leaveRoom(roomId);
+      await postSystemMessage(roomId,
+          '👑 Owner stepped out — admins are keeping the room alive');
+      return true;
+    }
+
+    if (room.isAdvanced) {
+      // Advanced room, no other mods → freeze chat until any mod returns.
+      // Owner stays as a member (offline) so they can return easily.
+      final batch = _db.batch();
+      batch.update(_rooms.doc(roomId), {
+        'status': 'frozen',
+        'frozenAt': FieldValue.serverTimestamp(),
+        'ownerLeftAt': FieldValue.serverTimestamp(),
+      });
+      batch.update(_rooms.doc(roomId).collection('members').doc(_me), {
+        'isPresent': false,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
+      await postSystemMessage(roomId,
+          '❄️ Room frozen — chat locked until owner / admin / co-owner returns');
+      return false;
+    }
+
+    // Temporary room → 3-min countdown then auto-delete.
+    final now = DateTime.now();
+    final deleteAt = now.add(const Duration(minutes: 3));
     final batch = _db.batch();
-    batch.set(ref, room.toCreateMap());
-    batch.set(ref.collection('members').doc(_me), {
-      'uid': _me,
-      'displayName': m['displayName'] ?? 'Owner',
-      'photoUrl': m['photoURL'],
-      'charms': m['charms'] ?? 0,
-      'role': RoomRole.owner.toRaw(),
-      'joinedAt': FieldValue.serverTimestamp(),
-      'isPresent': true,
+    batch.update(_rooms.doc(roomId), {
+      'status': 'pending_delete',
+      'ownerLeftAt': Timestamp.fromDate(now),
+      'deleteAt': Timestamp.fromDate(deleteAt),
+    });
+    batch.update(_rooms.doc(roomId).collection('members').doc(_me), {
+      'isPresent': false,
       'lastActiveAt': FieldValue.serverTimestamp(),
     });
     await batch.commit();
-    return ref.id;
+    await postSystemMessage(roomId,
+        '👑 Owner has exited — room will be deleted in 3 min unless they return');
+    return false;
   }
 
-  /// Soft delete — flips status. Cleanup of subcollections happens via
-  /// the scheduled function (Slice 5).
-  Future<void> deleteRoom(String roomId) async {
+  /// Called when any moderator (owner / co-owner / admin) opens a room that's
+  /// in pending_delete or frozen state. Cancels the countdown / unfreezes.
+  ///
+  /// - For `pending_delete`: only the owner can rescue (they triggered it).
+  /// - For `frozen`: any mod can unfreeze.
+  Future<void> modReturnRoom(String roomId) async {
+    final snap = await _rooms.doc(roomId).get();
+    if (!snap.exists) return;
+    final data = snap.data()!;
+    final status = data['status'] as String?;
+    if (status != 'pending_delete' && status != 'frozen') return;
+
+    final memSnap =
+        await _rooms.doc(roomId).collection('members').doc(_me).get();
+    if (!memSnap.exists) return;
+    final myRole = memSnap.data()?['role'] as String?;
+    final isMod =
+        myRole == 'owner' || myRole == 'co_owner' || myRole == 'admin';
+    if (!isMod) return;
+
+    if (status == 'pending_delete' && myRole != 'owner') return;
+
+    await _rooms.doc(roomId).update({
+      'status': 'live',
+      'ownerLeftAt': FieldValue.delete(),
+      'deleteAt': FieldValue.delete(),
+      'frozenAt': FieldValue.delete(),
+    });
+
+    final msg = status == 'frozen'
+        ? '🔓 Room unfrozen — chat is back'
+        : '👑 Owner is back — room saved';
+    await postSystemMessage(roomId, msg);
+  }
+
+  /// Soft-delete the room if its `deleteAt` has passed. Idempotent.
+  /// Any client can call this — first one wins. Used by the countdown
+  /// banner when the timer hits zero.
+  Future<bool> autoDeleteIfExpired(String roomId) async {
+    final snap = await _rooms.doc(roomId).get();
+    if (!snap.exists) return false;
+    final data = snap.data()!;
+    if (data['status'] != 'pending_delete') return false;
+    final deleteAt = data['deleteAt'];
+    if (deleteAt is! Timestamp) return false;
+    if (deleteAt.toDate().isAfter(DateTime.now())) return false;
+
     await _rooms.doc(roomId).update({
       'status': 'deleted',
       'deletedAt': FieldValue.serverTimestamp(),
     });
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -269,7 +394,7 @@ class RoomService {
   }) =>
       sendTextMessage(roomId, text);
 
-    Future<void> sendTextMessage(String roomId, String text) async {
+  Future<void> sendTextMessage(String roomId, String text) async {
     if (text.trim().isEmpty) return;
 
     // Mute check — block sending if mutedUntil is in the future.
@@ -284,6 +409,19 @@ class RoomService {
       throw Exception('You are muted in this room');
     }
 
+    // Frozen / pending_delete / deleted check — block all chat.
+    final roomDoc = await _rooms.doc(roomId).get();
+    final status = roomDoc.data()?['status'] as String?;
+    if (status == 'frozen') {
+      throw Exception('Room is frozen — chat is locked');
+    }
+    if (status == 'pending_delete') {
+      throw Exception('Room is closing');
+    }
+    if (status == 'deleted') {
+      throw Exception('Room no longer exists');
+    }
+
     final me = await _db.collection('users').doc(_me).get();
     final m = me.data() ?? {};
     await _rooms.doc(roomId).collection('messages').add({
@@ -296,7 +434,7 @@ class RoomService {
       'hiddenFor': <String>[],
       'createdAt': FieldValue.serverTimestamp(),
     });
-    }
+  }
 
   /// Append my uid to a message's hiddenFor — invisible only to me.
   Future<void> hideMessageForMe(String roomId, String messageId) {
@@ -316,7 +454,7 @@ class RoomService {
       'text': text,
       'senderId': 'system',
       'senderName': 'System',
-      'senderPhoto': null,
+      'senderPhoto': 'null',
       'senderCharms': 0,
       'hiddenFor': <String>[],
       'createdAt': FieldValue.serverTimestamp(),
