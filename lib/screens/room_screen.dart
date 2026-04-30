@@ -1191,3 +1191,156 @@ class _RoomScreenState extends State<RoomScreen>
     );
   }
 }
+
+
+class _CountdownBanner extends StatefulWidget {
+  final DateTime deleteAt;
+  final bool showReturnButton;
+  final VoidCallback onReturn;
+
+  const _CountdownBanner({
+    required this.deleteAt,
+    required this.showReturnButton,
+    required this.onReturn,
+  });
+
+  @override
+  State<_CountdownBanner> createState() => _CountdownBannerState();
+}
+
+class _CountdownBannerState extends State<_CountdownBanner> {
+  late final Stream<DateTime> _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Stream<DateTime>.periodic(
+        const Duration(seconds: 1), (_) => DateTime.now());
+  }
+
+  String _fmt(Duration d) {
+    if (d.isNegative) return '0:00';
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DateTime>(
+      stream: _tick,
+      initialData: DateTime.now(),
+      builder: (_, snap) {
+        final remaining = widget.deleteAt.difference(snap.data!);
+        return Container(
+          width: double.infinity,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+            ),
+            border: Border(
+              top: BorderSide(color: Colors.black26),
+              bottom: BorderSide(color: Colors.black26),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.timer_outlined,
+                  color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.showReturnButton
+                      ? 'You exited the room — closing in ${_fmt(remaining)}'
+                      : 'Owner has exited — room ends in ${_fmt(remaining)}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (widget.showReturnButton) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: widget.onReturn,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Stay',
+                      style: TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FrozenBanner extends StatelessWidget {
+  final VoidCallback onUnfreeze;
+  const _FrozenBanner({required this.onUnfreeze});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1E3A8A), Color(0xFF1E40AF)],
+        ),
+        border: Border(
+          top: BorderSide(color: Colors.black26),
+          bottom: BorderSide(color: Colors.black26),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.ac_unit, color: Colors.white, size: 18),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Room is frozen — waiting for owner / admin / co-owner',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+          GestureDetector(
+            onTap: onUnfreeze,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Unfreeze',
+                style: TextStyle(
+                    color: Color(0xFF1E40AF),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
