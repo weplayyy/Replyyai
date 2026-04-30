@@ -140,7 +140,7 @@ class RoomService {
   ///
   /// Returns true if the room is still chattable, false if it was put into
   /// pending_delete or frozen state.
-  Future<bool> ownerLeaveRoom(String roomId) async {
+    Future<bool> ownerLeaveRoom(String roomId) async {
     final roomSnap = await _rooms.doc(roomId).get();
     if (!roomSnap.exists) return false;
     final room = Room.fromMap(roomSnap.id, roomSnap.data()!);
@@ -153,15 +153,17 @@ class RoomService {
 
     if (room.isAdvanced && hasOtherMods) {
       // Advanced room with mods present → owner just leaves; room continues.
-      await leaveRoom(roomId);
+      // Post system message FIRST (while still a member of a live room).
       await postSystemMessage(roomId,
           '👑 Owner stepped out — admins are keeping the room alive');
+      await leaveRoom(roomId);
       return true;
     }
 
     if (room.isAdvanced) {
-      // Advanced room, no other mods → freeze chat until any mod returns.
-      // Owner stays as a member (offline) so they can return easily.
+      // Post system message FIRST (room still 'live'), then freeze.
+      await postSystemMessage(roomId,
+          '❄️ Room frozen — chat locked until owner / admin / co-owner returns');
       final batch = _db.batch();
       batch.update(_rooms.doc(roomId), {
         'status': 'frozen',
@@ -173,12 +175,12 @@ class RoomService {
         'lastActiveAt': FieldValue.serverTimestamp(),
       });
       await batch.commit();
-      await postSystemMessage(roomId,
-          '❄️ Room frozen — chat locked until owner / admin / co-owner returns');
       return false;
     }
 
-    // Temporary room → 3-min countdown then auto-delete.
+    // Temporary room → post message FIRST, then start the 3-min countdown.
+    await postSystemMessage(roomId,
+        '👑 Owner has exited — room will be deleted in 3 min unless they return');
     final now = DateTime.now();
     final deleteAt = now.add(const Duration(minutes: 3));
     final batch = _db.batch();
@@ -192,10 +194,8 @@ class RoomService {
       'lastActiveAt': FieldValue.serverTimestamp(),
     });
     await batch.commit();
-    await postSystemMessage(roomId,
-        '👑 Owner has exited — room will be deleted in 3 min unless they return');
     return false;
-  }
+    }
 
   /// Called when any moderator (owner / co-owner / admin) opens a room that's
   /// in pending_delete or frozen state. Cancels the countdown / unfreezes.
