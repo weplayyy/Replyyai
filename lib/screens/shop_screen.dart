@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/shop_item.dart';
 import '../services/shop_service.dart';
 import 'use_item_picker_screen.dart';
+import 'my_items_screen.dart';
+import 'cp_inbox_screen.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
@@ -422,97 +424,58 @@ Widget _topBar() {
 
   // -------------------- BOTTOM NAV --------------------
   Widget _bottomNav() {
-    Widget item(IconData icon, String label, {bool selected = false}) {
-      final color = selected ? _purple : Colors.white60;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () {},
-          child: Container(
-            decoration: selected
-                ? BoxDecoration(
-                    color: _purple.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(16),
-                  )
-                : null,
-            padding:
-                const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(height: 2),
-                Text(label,
-                    style: TextStyle(
-                        color: color,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-              ],
-            ),
+  Widget item(IconData icon, String label,
+      {bool selected = false, VoidCallback? onTap}) {
+    final color = selected ? _purple : Colors.white60;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          decoration: selected
+              ? BoxDecoration(
+                  color: _purple.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(16),
+                )
+              : null,
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600)),
+            ],
           ),
         ),
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          item(Icons.shopping_bag, 'Shop', selected: true),
-          item(Icons.inventory_2_outlined, 'My Items'),
-          item(Icons.card_giftcard, 'Gifts'),
-          item(Icons.diamond_outlined, 'Top Up'),
-        ],
       ),
     );
   }
 
-  void _openItemSheet(ShopItem item, int ownedQty) {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: _card,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  return Container(
+    margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+    decoration: BoxDecoration(
+      color: _card,
+      borderRadius: BorderRadius.circular(20),
     ),
-    builder: (_) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(item.emoji, style: const TextStyle(fontSize: 60)),
-            const SizedBox(height: 10),
-            Text(item.name,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            Text('Owned: $ownedQty',
-                style: const TextStyle(color: Colors.white60)),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _confirmBuy(item);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _purple,
-              ),
-              child: Text('Buy for ${_fmt(item.price)}'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      );
-    },
+    child: Row(
+      children: [
+        item(Icons.shopping_bag, 'Shop', selected: true, onTap: () {}),
+        item(Icons.inventory_2_outlined, 'My Items',
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const MyItemsScreen()))),
+        item(Icons.favorite, 'CP Inbox',
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const CpInboxScreen()))),
+        item(Icons.diamond_outlined, 'Top Up', onTap: () {}),
+      ],
+    ),
   );
   }
-
   // -------------------- BUY --------------------
   Future<void> _confirmBuy(ShopItem item) async {
     final currName =
