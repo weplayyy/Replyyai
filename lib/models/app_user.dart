@@ -1,15 +1,22 @@
 class AppUser {
   final String uid;
   final String displayName;
+  final String username;
   final String? photoURL;
   final String? email;
-  final String? bio;
-  final String? signature;
+  final String bio;
+  final String signature;
+  final bool isVerified;
 
   final int coins;
   final int clanCoins;
-  final int charms; // displayed as "Guard Points"
+  final int charms; // shown as "Guard Points"
   final int level;
+
+  final int friendsCount;
+  final int momentsCount;
+  final int visitorsCount;
+  final int followingCount;
 
   // Clan
   final String? clanId;
@@ -22,23 +29,29 @@ class AppUser {
   final String? cpRingId;
   final DateTime? cpSince;
 
-  // Tags equipped on the profile (max 3)
+  // Equipped tags (max 3)
   final List<String> activeTags;
 
-  // Activity (voice room / chat room / game)
+  // Activity (voice/chat room/game)
   final Map<String, dynamic>? activity;
 
   AppUser({
     required this.uid,
     required this.displayName,
+    this.username = '',
     this.photoURL,
     this.email,
-    this.bio,
-    this.signature,
+    this.bio = '',
+    this.signature = '',
+    this.isVerified = false,
     this.coins = 0,
     this.clanCoins = 0,
     this.charms = 0,
     this.level = 1,
+    this.friendsCount = 0,
+    this.momentsCount = 0,
+    this.visitorsCount = 0,
+    this.followingCount = 0,
     this.clanId,
     this.clanName,
     this.clanRole,
@@ -50,7 +63,9 @@ class AppUser {
     this.activity,
   });
 
-  factory AppUser.fromMap(String uid, Map<String, dynamic> m) {
+  /// Accepts either `AppUser.fromMap(map)` (uid inside the map)
+  /// or `AppUser.fromMap(map, uid)`.
+  factory AppUser.fromMap(Map<String, dynamic> m, [String? uid]) {
     DateTime? _ts(dynamic v) {
       if (v == null) return null;
       try {
@@ -62,16 +77,22 @@ class AppUser {
     }
 
     return AppUser(
-      uid: uid,
+      uid: uid ?? (m['uid'] as String? ?? ''),
       displayName: (m['displayName'] ?? 'User') as String,
+      username: (m['username'] ?? '') as String,
       photoURL: m['photoURL'] as String?,
       email: m['email'] as String?,
-      bio: m['bio'] as String?,
-      signature: m['signature'] as String?,
+      bio: (m['bio'] ?? '') as String,
+      signature: (m['signature'] ?? '') as String,
+      isVerified: (m['isVerified'] ?? false) as bool,
       coins: (m['coins'] ?? 0) as int,
       clanCoins: (m['clanCoins'] ?? 0) as int,
       charms: (m['charms'] ?? 0) as int,
       level: (m['level'] ?? 1) as int,
+      friendsCount: (m['friendsCount'] ?? 0) as int,
+      momentsCount: (m['momentsCount'] ?? 0) as int,
+      visitorsCount: (m['visitorsCount'] ?? 0) as int,
+      followingCount: (m['followingCount'] ?? 0) as int,
       clanId: m['clanId'] as String?,
       clanName: m['clanName'] as String?,
       clanRole: m['clanRole'] as String?,
@@ -88,14 +109,20 @@ class AppUser {
 
   Map<String, dynamic> toMap() => {
         'displayName': displayName,
+        'username': username,
         'photoURL': photoURL,
         'email': email,
         'bio': bio,
         'signature': signature,
+        'isVerified': isVerified,
         'coins': coins,
         'clanCoins': clanCoins,
         'charms': charms,
         'level': level,
+        'friendsCount': friendsCount,
+        'momentsCount': momentsCount,
+        'visitorsCount': visitorsCount,
+        'followingCount': followingCount,
         'clanId': clanId,
         'clanName': clanName,
         'clanRole': clanRole,
