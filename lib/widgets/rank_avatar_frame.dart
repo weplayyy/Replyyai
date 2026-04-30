@@ -36,7 +36,6 @@ class RankAvatarFrame extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          // Outer glow halo for legend tiers
           if (isLegend)
             Container(
               width: size + 14,
@@ -52,7 +51,6 @@ class RankAvatarFrame extends StatelessWidget {
                 ],
               ),
             ),
-          // Gradient ring
           Container(
             width: size + 8,
             height: size + 8,
@@ -76,15 +74,14 @@ class RankAvatarFrame extends StatelessWidget {
                   : [],
             ),
             child: Container(
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF1A0B2E),
+                color: Color(0xFF1A0B2E),
               ),
               padding: const EdgeInsets.all(2),
               child: ClipOval(child: child),
             ),
           ),
-          // Crown floating above the avatar for crown tiers
           if (isElite && showCrown)
             Positioned(
               top: -2,
