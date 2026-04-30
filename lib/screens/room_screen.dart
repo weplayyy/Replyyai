@@ -16,6 +16,7 @@ import 'gift_picker.dart';
 import 'gift_animation_overlay.dart';
 import 'shop_screen.dart';
 import 'user_profile_screen.dart';
+import '../features/rooms/widgets/manage_member_sheet.dart';
 
 class RoomScreen extends StatefulWidget {
   final Room room;
@@ -856,106 +857,128 @@ class _RoomScreenState extends State<RoomScreen>
 
   // ================= MEMBERS =================
 
-  Widget _membersTab() {
-    return StreamBuilder<List<RoomMember>>(
-      stream: _svc.watchMembers(widget.room.id),
-      builder: (_, snap) {
-        final members = [...(snap.data ?? const <RoomMember>[])];
-        // Sort: owner → co-owner → admin → member, then by charms desc.
-        members.sort((a, b) {
-          final r = a.role.index.compareTo(b.role.index);
-          if (r != 0) return r;
-          return b.charms.compareTo(a.charms);
-        });
+    Widget _membersTab() {
+    return StreamBuilder<RoomMember?>(
+      stream: _svc.watchMyMembership(widget.room.id),
+      builder: (_, meSnap) {
+        final me = meSnap.data;
+        return StreamBuilder<List<RoomMember>>(
+          stream: _svc.watchMembers(widget.room.id),
+          builder: (_, snap) {
+            final members = [...(snap.data ?? const <RoomMember>[])];
+            members.sort((a, b) {
+              final r = a.role.index.compareTo(b.role.index);
+              if (r != 0) return r;
+              return b.charms.compareTo(a.charms);
+            });
 
-        if (members.isEmpty) {
-          return const Center(
-            child: Text('No members yet',
-                style: TextStyle(color: Colors.white54)),
-          );
-        }
+            if (members.isEmpty) {
+              return const Center(
+                child: Text('No members yet',
+                    style: TextStyle(color: Colors.white54)),
+              );
+            }
 
-        return ListView.separated(
-          padding: const EdgeInsets.all(10),
-          itemCount: members.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 4),
-          itemBuilder: (_, i) {
-            final m = members[i];
-            return Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: ListTile(
-                onTap: () => _openProfile(m.uid),
-                leading: Stack(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: const Color(0xFF1F0B3F),
-                      backgroundImage:
-                          (m.photoUrl != null && m.photoUrl!.isNotEmpty)
-                              ? NetworkImage(m.photoUrl!)
+            return ListView.separated(
+              padding: const EdgeInsets.all(10),
+              itemCount: members.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 4),
+              itemBuilder: (_, i) {
+                final m = members[i];
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: ListTile(
+                    onTap: () => _openProfile(m.uid),
+                    onLongPress: () {
+                      if (me == null || m.uid == _meUid) return;
+                      ManageMemberSheet.show(
+                        context: context,
+                        room: widget.room,
+                        me: me,
+                        target: m,
+                        svc: _svc,
+                      );
+                    },
+                    leading: Stack(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: const Color(0xFF1F0B3F),
+                          backgroundImage:
+                              (m.photoUrl != null && m.photoUrl!.isNotEmpty)
+                                  ? NetworkImage(m.photoUrl!)
+                                  : null,
+                          child: (m.photoUrl == null || m.photoUrl!.isEmpty)
+                              ? Text(
+                                  m.displayName.isNotEmpty
+                                      ? m.displayName[0].toUpperCase()
+                                      : '?',
+                                  style:
+                                      const TextStyle(color: Colors.white),
+                                )
                               : null,
-                      child: (m.photoUrl == null || m.photoUrl!.isEmpty)
-                          ? Text(
-                              m.displayName.isNotEmpty
-                                  ? m.displayName[0].toUpperCase()
-                                  : '?',
-                              style:
-                                  const TextStyle(color: Colors.white),
-                            )
-                          : null,
-                    ),
-                    if (m.isPresent)
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF22C55E),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color: const Color(0xFF0F0A1F),
-                                width: 2),
-                          ),
                         ),
-                      ),
-                  ],
-                ),
-                title: Row(
-                  children: [
-                    Flexible(
-                      child: Text(m.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600)),
+                        if (m.isPresent)
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF22C55E),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: const Color(0xFF0F0A1F),
+                                    width: 2),
+                              ),
+                            ),
+                          ),
+                        if (m.isMuted)
+                          const Positioned(
+                            left: 0,
+                            top: 0,
+                            child: Icon(Icons.volume_off,
+                                color: Colors.amber, size: 14),
+                          ),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    _roleChip(m.role),
-                  ],
-                ),
-                subtitle: Text('${m.charms} charms',
-                    style: const TextStyle(color: Colors.white54)),
-                trailing: m.uid == _meUid
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.card_giftcard,
-                            color: Color(0xFFEC4899)),
-                        onPressed: () => _giftFlow(
-                            toUid: m.uid, toName: m.displayName),
-                      ),
-              ),
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(m.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                        const SizedBox(width: 6),
+                        _roleChip(m.role),
+                      ],
+                    ),
+                    subtitle: Text('${m.charms} charms',
+                        style: const TextStyle(color: Colors.white54)),
+                    trailing: m.uid == _meUid
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.card_giftcard,
+                                color: Color(0xFFEC4899)),
+                            onPressed: () => _giftFlow(
+                                toUid: m.uid, toName: m.displayName),
+                          ),
+                  ),
+                );
+              },
             );
           },
         );
       },
     );
-  }
-
+    }
+  
   Widget _roleChip(RoomRole role) {
     if (role == RoomRole.member) return const SizedBox.shrink();
     final colors = switch (role) {
