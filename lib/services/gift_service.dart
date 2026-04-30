@@ -22,22 +22,16 @@ class GiftService {
     return '${ids[0]}_${ids[1]}';
   }
 
-  /// 1% chance of jackpot (3x..10x of price).
-  /// Otherwise random 0..price inclusive.
-  /// Gifts under 100 give no lucky coins.
   ({int luckyCoins, bool jackpot}) _rollLucky(int price) {
     if (price < 100) return (luckyCoins: 0, jackpot: false);
-    final isJackpot = _rng.nextInt(100) == 0; // exactly 1/100
+    final isJackpot = _rng.nextInt(100) == 0;
     if (isJackpot) {
-      final extra = _rng.nextInt(price * 7 + 1); // 0..7*price
+      final extra = _rng.nextInt(price * 7 + 1);
       return (luckyCoins: price * 3 + extra, jackpot: true);
     }
     return (luckyCoins: _rng.nextInt(price + 1), jackpot: false);
   }
 
-  /// Upsert the sender as a "guardian" of the receiver and bump
-  /// their cumulative charm contribution. Used to populate the
-  /// Guardians strip on the profile page (top gifters).
   Future<void> _upsertGuardian({
     required String fromUid,
     required String toUid,
@@ -82,18 +76,14 @@ class GiftService {
       final receiverCharms = (receiverSnap.data()?['charms'] ?? 0) as int;
       final newReceiverCharms = receiverCharms + charms;
 
-      // Sender: only coins are deducted. No charms, no level bump.
       tx.update(senderRef, {'coins': senderCoins - gift.price});
 
-      // Receiver: gets charms + lucky coins, level recomputed.
       tx.update(receiverRef, {
         'coins': receiverCoins + roll.luckyCoins,
         'charms': newReceiverCharms,
-        'level': 1 + (newReceiverCharms ~/ 100),
       });
     });
 
-    // Track guardian (top gifters by charms contributed).
     await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
 
     final chatRef = _db.collection('chats').doc(_chatId(fromUid, toUid));
@@ -126,7 +116,6 @@ class GiftService {
     );
   }
 
-  /// Same rules as [sendGift] but the message lands in a room feed.
   Future<GiftSendResult> sendGiftInRoom({
     required String fromUid,
     required String toUid,
@@ -156,11 +145,9 @@ class GiftService {
       tx.update(receiverRef, {
         'coins': receiverCoins + roll.luckyCoins,
         'charms': newReceiverCharms,
-        'level': 1 + (newReceiverCharms ~/ 100),
       });
     });
 
-    // Track guardian (top gifters by charms contributed).
     await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
 
     await _db
