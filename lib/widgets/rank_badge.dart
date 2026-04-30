@@ -95,7 +95,6 @@ class RankBadge extends StatelessWidget {
               ],
             ],
           ),
-          // Sparkles only for legend tiers
           if (isLegend) ...[
             Positioned(
               top: -3 * scale,
