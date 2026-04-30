@@ -45,6 +45,56 @@ class RoomService {
         (s) => s.exists ? Room.fromMap(s.id, s.data()!) : null);
   }
 
+    // ---------------------------------------------------------------------------
+  // MODERATION — kick / mute / promote / demote.
+  // Charm rule is enforced at the call site (see ManageMemberSheet); these
+  // methods just do the writes. Firestore Security Rules should also enforce
+  // the rule server-side (see comment block at the bottom of this file).
+  // ---------------------------------------------------------------------------
+
+  /// Hard-remove a member doc and decrement counters.
+  Future<void> kickMember(String roomId, String targetUid) async {
+    final ref = _rooms.doc(roomId).collection('members').doc(targetUid);
+    final existing = await ref.get();
+    if (!existing.exists) return;
+    final wasPresent = (existing.data()?['isPresent'] ?? false) as bool;
+    final name =
+        (existing.data()?['displayName'] ?? 'A member') as String;
+
+    final batch = _db.batch();
+    batch.delete(ref);
+    batch.update(_rooms.doc(roomId), {
+      'memberCount': FieldValue.increment(-1),
+      if (wasPresent) 'onlineCount': FieldValue.increment(-1),
+    });
+    await batch.commit();
+
+    await postSystemMessage(roomId, '$name was removed from the room');
+  }
+
+  /// Set mutedUntil = now + duration.
+  Future<void> muteMember(
+      String roomId, String targetUid, Duration duration) async {
+    final until = DateTime.now().add(duration);
+    await _rooms.doc(roomId).collection('members').doc(targetUid).update({
+      'mutedUntil': Timestamp.fromDate(until),
+    });
+  }
+
+  Future<void> unmuteMember(String roomId, String targetUid) async {
+    await _rooms.doc(roomId).collection('members').doc(targetUid).update({
+      'mutedUntil': FieldValue.delete(),
+    });
+  }
+
+  /// Owner-only — promote / demote.
+  Future<void> setMemberRole(
+      String roomId, String targetUid, RoomRole role) async {
+    await _rooms.doc(roomId).collection('members').doc(targetUid).update({
+      'role': role.toRaw(),
+    });
+  }
+
   /// Creates a room AND adds the creator as the OWNER member in one batch.
   Future<String> createRoom(Room room) async {
     final ref = _rooms.doc();
