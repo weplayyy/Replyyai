@@ -7,7 +7,7 @@ import '../../services/user_service.dart';
 import '../../models/app_user.dart';
 import '../extras/settings_screen.dart';
 import '../extras/edit_profile_screen.dart';
-import '../extras/shop_screen.dart';
+import '../shop_screen.dart';
 import '../extras/moments_screen.dart';
 import '../extras/visitors_screen.dart';
 
