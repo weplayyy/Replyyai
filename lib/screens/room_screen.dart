@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/room.dart';
-import '../models/gift.dart';
 import '../models/app_user.dart';
 import '../services/room_service.dart';
 import '../services/active_room_service.dart';
@@ -62,10 +61,17 @@ class _RoomScreenState extends State<RoomScreen>
     await _svc.sendTextMessage(widget.room.id, text);
   }
 
+  void _openProfile(String uid) {
+    if (uid.isEmpty || uid == 'system') return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UserProfileScreen(uid: uid)),
+    );
+  }
+
   /// One single gift flow used everywhere. Pass a recipient or null
   /// to first prompt for a recipient via the picker.
   Future<void> _giftFlow({String? toUid, String? toName}) async {
-    // 1) Resolve recipient
     if (toUid == null) {
       final picked =
           await RecipientPickerSheet.show(context, widget.room.id);
@@ -79,17 +85,14 @@ class _RoomScreenState extends State<RoomScreen>
       return;
     }
 
-    // 2) Fetch live coin balance
     final me = await _userSvc.getUser(_meUid);
     final balance = me?.coins ?? 0;
 
     if (!mounted) return;
 
-    // 3) Open YOUR existing gift picker
     final gift = await showGiftPicker(context, balance);
     if (gift == null || !mounted) return;
 
-    // 4) Send via YOUR existing gift service (coins/charms/lucky/jackpot/guardian)
     try {
       final result = await _giftSvc.sendGiftInRoom(
         fromUid: _meUid,
@@ -98,7 +101,6 @@ class _RoomScreenState extends State<RoomScreen>
         gift: gift,
       );
 
-      // 5) Play fullscreen animation if the gift has a video
       if (gift.videoAsset != null && gift.videoAsset!.isNotEmpty) {
         if (mounted) await playGiftAnimation(context, gift.videoAsset!);
       }
@@ -185,11 +187,7 @@ class _RoomScreenState extends State<RoomScreen>
         await _giftFlow(toUid: m.senderId, toName: m.senderName);
         break;
       case 'profile':
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => UserProfileScreen(uid: m.senderId)),
-        );
+        _openProfile(m.senderId);
         break;
       case 'hide':
         await _svc.hideMessageForMe(widget.room.id, m.id);
@@ -264,26 +262,40 @@ class _RoomScreenState extends State<RoomScreen>
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF0F0A1F),
-        body: SafeArea(
-          child: Column(
-            children: [
-              _header(),
-              _pinnedBanner(),
-              _tabBar(),
-              Expanded(
-                child: TabBarView(
-                  controller: _tab,
-                  children: [
-                    _chatTab(),
-                    _aboutTab(),
-                    _membersTab(),
-                    _leaderboardTab(),
-                  ],
+        body: Container(
+          // Rich, expensive-looking gradient backdrop.
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF1A0B33),
+                Color(0xFF0F0A1F),
+                Color(0xFF080414),
+              ],
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                _header(),
+                _pinnedBanner(),
+                _tabBar(),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tab,
+                    children: [
+                      _chatTab(),
+                      _aboutTab(),
+                      _membersTab(),
+                      _leaderboardTab(),
+                    ],
+                  ),
                 ),
-              ),
-              _inputBar(),
-              _bottomToolbar(),
-            ],
+                _inputBar(),
+                _bottomToolbar(),
+              ],
+            ),
           ),
         ),
       ),
@@ -500,7 +512,8 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   Widget _pinnedBanner() {
-    if (widget.room.pinnedMessage == null) return const SizedBox.shrink();
+    final pin = widget.room.pinnedMessage;
+    if (pin == null || pin.isEmpty) return const SizedBox.shrink();
 
     return Container(
       margin: const EdgeInsets.all(10),
@@ -510,15 +523,23 @@ class _RoomScreenState extends State<RoomScreen>
           colors: [Color(0xFF6D28D9), Color(0xFF9333EA)],
         ),
         borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+              color: const Color(0xFF9333EA).withOpacity(0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 4)),
+        ],
       ),
       child: Row(
         children: [
-          const Icon(Icons.push_pin, color: Colors.white),
+          const Icon(Icons.push_pin, color: Colors.white, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              widget.room.pinnedMessage!,
-              style: const TextStyle(color: Colors.white),
+              pin,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
             ),
           ),
         ],
@@ -530,6 +551,8 @@ class _RoomScreenState extends State<RoomScreen>
     return TabBar(
       controller: _tab,
       indicatorColor: const Color(0xFF8B5CF6),
+      labelColor: Colors.white,
+      unselectedLabelColor: Colors.white60,
       tabs: const [
         Tab(text: "Chat"),
         Tab(text: "About"),
@@ -540,74 +563,293 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   // ================= CHAT =================
- Widget _chatTab() {
-  return StreamBuilder<List<RoomMessage>>(
-    stream: _svc.watchMessages(widget.room.id),
-    builder: (_, snap) {
-      final messages = snap.data ?? [];
 
-      return ListView.builder(
-        controller: _scroll,
-        padding: const EdgeInsets.all(10),
-        itemCount: messages.length,
-        itemBuilder: (_, i) {
-          final m = messages[i];
-          final isMe = m.senderId == _meUid;
-
-          return GestureDetector(
-            onLongPress: () => _showMessageMenu(m),
-            child: Align(
-              alignment:
-                  isMe ? Alignment.centerRight : Alignment.centerLeft,
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: isMe
-                      ? const LinearGradient(
-                          colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
-                        )
-                      : null,
-                  color:
-                      isMe ? null : Colors.white.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Column(
-                  crossAxisAlignment: isMe
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
-                  children: [
-                    if (!isMe)
-                      Text(
-                        m.senderName ?? "User",
-                        style: const TextStyle(
-                          color: Colors.white60,
-                          fontSize: 10,
-                        ),
-                      ),
-                    Text(
-                      m.text ?? '',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
+  Widget _chatTab() {
+    return StreamBuilder<List<RoomMessage>>(
+      stream: _svc.watchMessagesTyped(widget.room.id),
+      builder: (_, snap) {
+        final messages = snap.data ?? const <RoomMessage>[];
+        if (messages.isEmpty) {
+          return Center(
+            child: Text(
+              'Say hi 👋',
+              style: TextStyle(color: Colors.white.withOpacity(0.5)),
             ),
           );
-        },
-      );
-    },
-  );
- }
+        }
+        return ListView.builder(
+          controller: _scroll,
+          reverse: true, // newest at the bottom (orderBy desc + reverse)
+          padding: const EdgeInsets.all(10),
+          itemCount: messages.length,
+          itemBuilder: (_, i) {
+            final m = messages[i];
+            if (m.type == RoomMessageType.system) {
+              return _systemBubble(m);
+            }
+            return _chatBubble(m);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _systemBubble(RoomMessage m) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            m.text,
+            style: const TextStyle(color: Colors.white60, fontSize: 11),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chatBubble(RoomMessage m) {
+    final isMe = m.senderId == _meUid;
+    final isOwner = m.senderId == widget.room.ownerId;
+
+    final avatar = GestureDetector(
+      onTap: () => _openProfile(m.senderId),
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: isOwner
+              ? const LinearGradient(
+                  colors: [Color(0xFFFBBF24), Color(0xFFF59E0B)])
+              : const LinearGradient(
+                  colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
+          boxShadow: isOwner
+              ? [
+                  BoxShadow(
+                      color: const Color(0xFFFBBF24).withOpacity(0.45),
+                      blurRadius: 10),
+                ]
+              : null,
+        ),
+        padding: const EdgeInsets.all(2),
+        child: CircleAvatar(
+          backgroundColor: const Color(0xFF1F0B3F),
+          backgroundImage: (m.senderPhoto != null && m.senderPhoto!.isNotEmpty)
+              ? NetworkImage(m.senderPhoto!)
+              : null,
+          child: (m.senderPhoto == null || m.senderPhoto!.isEmpty)
+              ? Text(
+                  m.senderName.isNotEmpty
+                      ? m.senderName[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold),
+                )
+              : null,
+        ),
+      ),
+    );
+
+    final bubble = GestureDetector(
+      onLongPress: () => _showMessageMenu(m),
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.66,
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: isMe
+              ? const LinearGradient(
+                  colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                )
+              : null,
+          color: isMe ? null : Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(14),
+            topRight: const Radius.circular(14),
+            bottomLeft: Radius.circular(isMe ? 14 : 4),
+            bottomRight: Radius.circular(isMe ? 4 : 14),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            if (!isMe)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    m.senderName,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (isOwner) ...[
+                    const SizedBox(width: 4),
+                    const Icon(Icons.workspace_premium,
+                        color: Color(0xFFFBBF24), size: 11),
+                  ],
+                ],
+              ),
+            if (m.type == RoomMessageType.gift)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.card_giftcard,
+                      color: Colors.white, size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Sent ${m.giftName ?? "a gift"}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ],
+              )
+            else
+              Text(
+                m.text,
+                style: const TextStyle(color: Colors.white),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: isMe
+            ? [bubble, const SizedBox(width: 8), avatar]
+            : [avatar, const SizedBox(width: 8), bubble],
+      ),
+    );
+  }
 
   // ================= ABOUT =================
 
   Widget _aboutTab() {
-    return Center(
-      child: Text(
-        "Room Info",
-        style: TextStyle(color: Colors.white.withOpacity(0.6)),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _aboutCard(
+            icon: Icons.info_outline,
+            title: 'Description',
+            child: Text(
+              widget.room.description.isEmpty
+                  ? 'No description set.'
+                  : widget.room.description,
+              style: TextStyle(
+                  color: Colors.white.withOpacity(0.85),
+                  height: 1.4),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _aboutCard(
+            icon: Icons.local_offer_outlined,
+            title: 'Tags',
+            child: widget.room.tags.isEmpty
+                ? const Text('—', style: TextStyle(color: Colors.white54))
+                : Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: widget.room.tags
+                        .map(
+                          (t) => Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(20),
+                              border:
+                                  Border.all(color: Colors.white12),
+                            ),
+                            child: Text('#$t',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12)),
+                          ),
+                        )
+                        .toList(),
+                  ),
+          ),
+          const SizedBox(height: 12),
+          _aboutCard(
+            icon: Icons.workspace_premium,
+            title: 'Owner',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: GestureDetector(
+                onTap: () => _openProfile(widget.room.ownerId),
+                child: CircleAvatar(
+                  backgroundColor: const Color(0xFF1F0B3F),
+                  backgroundImage: (widget.room.ownerPhoto != null &&
+                          widget.room.ownerPhoto!.isNotEmpty)
+                      ? NetworkImage(widget.room.ownerPhoto!)
+                      : null,
+                  child: (widget.room.ownerPhoto == null ||
+                          widget.room.ownerPhoto!.isEmpty)
+                      ? Text(widget.room.ownerName[0].toUpperCase(),
+                          style:
+                              const TextStyle(color: Colors.white))
+                      : null,
+                ),
+              ),
+              title: Text(widget.room.ownerName,
+                  style: const TextStyle(color: Colors.white)),
+              subtitle: Text('${widget.room.ownerCharms} charms',
+                  style: const TextStyle(color: Colors.white54)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _aboutCard({
+    required IconData icon,
+    required String title,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: const Color(0xFFEC4899), size: 16),
+              const SizedBox(width: 6),
+              Text(title,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
       ),
     );
   }
@@ -618,23 +860,121 @@ class _RoomScreenState extends State<RoomScreen>
     return StreamBuilder<List<RoomMember>>(
       stream: _svc.watchMembers(widget.room.id),
       builder: (_, snap) {
-        final members = snap.data ?? [];
+        final members = [...(snap.data ?? const <RoomMember>[])];
+        // Sort: owner → co-owner → admin → member, then by charms desc.
+        members.sort((a, b) {
+          final r = a.role.index.compareTo(b.role.index);
+          if (r != 0) return r;
+          return b.charms.compareTo(a.charms);
+        });
 
-        return ListView.builder(
+        if (members.isEmpty) {
+          return const Center(
+            child: Text('No members yet',
+                style: TextStyle(color: Colors.white54)),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.all(10),
           itemCount: members.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 4),
           itemBuilder: (_, i) {
             final m = members[i];
-
-            return ListTile(
-              leading: CircleAvatar(child: Text(m.name[0])),
-              title: Text(m.name,
-                  style: const TextStyle(color: Colors.white)),
-              subtitle: Text(m.role.name,
-                  style: const TextStyle(color: Colors.white54)),
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                onTap: () => _openProfile(m.uid),
+                leading: Stack(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: const Color(0xFF1F0B3F),
+                      backgroundImage:
+                          (m.photoUrl != null && m.photoUrl!.isNotEmpty)
+                              ? NetworkImage(m.photoUrl!)
+                              : null,
+                      child: (m.photoUrl == null || m.photoUrl!.isEmpty)
+                          ? Text(
+                              m.displayName.isNotEmpty
+                                  ? m.displayName[0].toUpperCase()
+                                  : '?',
+                              style:
+                                  const TextStyle(color: Colors.white),
+                            )
+                          : null,
+                    ),
+                    if (m.isPresent)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF22C55E),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: const Color(0xFF0F0A1F),
+                                width: 2),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                title: Row(
+                  children: [
+                    Flexible(
+                      child: Text(m.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: 6),
+                    _roleChip(m.role),
+                  ],
+                ),
+                subtitle: Text('${m.charms} charms',
+                    style: const TextStyle(color: Colors.white54)),
+                trailing: m.uid == _meUid
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.card_giftcard,
+                            color: Color(0xFFEC4899)),
+                        onPressed: () => _giftFlow(
+                            toUid: m.uid, toName: m.displayName),
+                      ),
+              ),
             );
           },
         );
       },
+    );
+  }
+
+  Widget _roleChip(RoomRole role) {
+    if (role == RoomRole.member) return const SizedBox.shrink();
+    final colors = switch (role) {
+      RoomRole.owner => const [Color(0xFFFBBF24), Color(0xFFF59E0B)],
+      RoomRole.coOwner => const [Color(0xFFEC4899), Color(0xFF8B5CF6)],
+      RoomRole.admin => const [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+      RoomRole.member => const [Colors.transparent, Colors.transparent],
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: colors),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(role.label,
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.bold)),
     );
   }
 
@@ -643,7 +983,7 @@ class _RoomScreenState extends State<RoomScreen>
   Widget _leaderboardTab() {
     return Center(
       child: Text(
-        "Leaderboard Coming Soon",
+        "Leaderboard coming soon",
         style: TextStyle(color: Colors.white.withOpacity(0.6)),
       ),
     );
@@ -663,25 +1003,41 @@ class _RoomScreenState extends State<RoomScreen>
       child: Row(
         children: [
           Expanded(
-            child: TextField(
-              controller: _msgC,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: "Type message...",
-                hintStyle:
-                    TextStyle(color: Colors.white.withOpacity(0.4)),
-                border: InputBorder.none,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: TextField(
+                controller: _msgC,
+                style: const TextStyle(color: Colors.white),
+                onSubmitted: (_) => _send(),
+                decoration: InputDecoration(
+                  hintText: "Type a message...",
+                  hintStyle:
+                      TextStyle(color: Colors.white.withOpacity(0.4)),
+                  border: InputBorder.none,
+                ),
               ),
             ),
           ),
+          const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.card_giftcard,
                 color: Color(0xFFEC4899)),
             onPressed: () => _giftFlow(),
           ),
-          IconButton(
-            icon: const Icon(Icons.send, color: Colors.white),
-            onPressed: _send,
+          Container(
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                  colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.send, color: Colors.white),
+              onPressed: _send,
+            ),
           ),
         ],
       ),
