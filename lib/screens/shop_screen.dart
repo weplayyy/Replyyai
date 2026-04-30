@@ -64,52 +64,54 @@ class _ShopScreenState extends State<ShopScreen>
   }
 
   // -------------------- TOP BAR --------------------
-  Widget _topBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new,
-                color: Colors.white, size: 18),
-            onPressed: () => Navigator.maybePop(context),
-          ),
-          const SizedBox(width: 4),
-          const Text('Shop',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold)),
-          const Spacer(),
-          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(_uid)
-                .snapshots(),
-            builder: (_, s) {
-                            final d = s.data?.data() ?? const {};
-              final coins = (d['coins'] ?? 0) as int;
-              final clanCoins = (d['clanCoins'] ?? 0) as int;
-              return Row(
-                children: [
-                  _balancePill(_diamond, '💎', clanCoins),
-                  const SizedBox(width: 6),
-                  _balancePill(_gold, '⭐', coins),
-                ],
-              );
-                ],
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.shopping_bag_outlined,
-                color: Colors.white),
-            onPressed: () {},
-          ),
-        ],
-      ),
-    );
-  }
+Widget _topBar() {
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    child: Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new,
+              color: Colors.white, size: 18),
+          onPressed: () => Navigator.maybePop(context),
+        ),
+        const SizedBox(width: 4),
+        const Text('Shop',
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold)),
+        const Spacer(),
+
+        /// ✅ FIXED STREAM BUILDER
+        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(_uid)
+              .snapshots(),
+          builder: (_, s) {
+            final d = s.data?.data() ?? const {};
+            final coins = (d['coins'] ?? 0) as int;
+            final clanCoins = (d['clanCoins'] ?? 0) as int;
+
+            return Row(
+              children: [
+                _balancePill(_diamond, '💎', clanCoins),
+                const SizedBox(width: 6),
+                _balancePill(_gold, '⭐', coins),
+              ],
+            );
+          },
+        ),
+
+        IconButton(
+          icon: const Icon(Icons.shopping_bag_outlined,
+              color: Colors.white),
+          onPressed: () {},
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _balancePill(Color color, String icon, int n) {
     return Container(
@@ -467,6 +469,48 @@ class _ShopScreenState extends State<ShopScreen>
         ],
       ),
     );
+  }
+
+  void _openItemSheet(ShopItem item, int ownedQty) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: _card,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(item.emoji, style: const TextStyle(fontSize: 60)),
+            const SizedBox(height: 10),
+            Text(item.name,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text('Owned: $ownedQty',
+                style: const TextStyle(color: Colors.white60)),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _confirmBuy(item);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _purple,
+              ),
+              child: Text('Buy for ${_fmt(item.price)}'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      );
+    },
+  );
   }
 
   // -------------------- BUY --------------------
