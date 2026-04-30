@@ -540,32 +540,66 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   // ================= CHAT =================
+ Widget _chatTab() {
+  return StreamBuilder<List<RoomMessage>>(
+    stream: _svc.watchMessages(widget.room.id),
+    builder: (_, snap) {
+      final messages = snap.data ?? [];
 
-  Widget _chatTab() {
-    return StreamBuilder<List<RoomMessage>>(
-      stream: _svc.watchMessages(widget.room.id),
-      builder: (_, snap) {
-        final messages = snap.data ?? [];
+      return ListView.builder(
+        controller: _scroll,
+        padding: const EdgeInsets.all(10),
+        itemCount: messages.length,
+        itemBuilder: (_, i) {
+          final m = messages[i];
+          final isMe = m.senderId == _meUid;
 
-        return ListView.builder(
-          controller: _scroll,
-          padding: const EdgeInsets.all(10),
-          itemCount: messages.length,
-          itemBuilder: (_, i) {
-            final m = messages[i];
-
-            return GestureDetector(
-              onLongPress: () => _showMessageMenu(m),
-              child: RoomMessageBubble(
-                message: m,
-                isMe: m.senderId == _meUid,
+          return GestureDetector(
+            onLongPress: () => _showMessageMenu(m),
+            child: Align(
+              alignment:
+                  isMe ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: isMe
+                      ? const LinearGradient(
+                          colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                        )
+                      : null,
+                  color:
+                      isMe ? null : Colors.white.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: isMe
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.start,
+                  children: [
+                    if (!isMe)
+                      Text(
+                        m.senderName ?? "User",
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 10,
+                        ),
+                      ),
+                    Text(
+                      m.text ?? '',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
               ),
-            );
-          },
-        );
-      },
-    );
-  }
+            ),
+          );
+        },
+      );
+    },
+  );
+ }
 
   // ================= ABOUT =================
 
