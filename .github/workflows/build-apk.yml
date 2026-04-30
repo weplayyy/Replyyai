@@ -73,7 +73,7 @@ jobs:
               -map '0:v:0' -map '0:a:0?' \
               -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p \
               -preset veryfast -crf 23 \
-              -vf "scale='min(720,iw)':-2:force_original_aspect_ratio=decrease,fps=30,format=yuv420p" \
+              -vf "scale='min(720,iw)':-2,fps=30,format=yuv420p,pad=ceil(iw/2)*2:ceil(ih/2)*2" \
               -g 30 -keyint_min 30 -sc_threshold 0 \
               -c:a aac -b:a 128k -ac 2 -ar 44100 \
               -movflags +faststart \
@@ -99,10 +99,15 @@ jobs:
               -show_entries stream=pix_fmt -of default=nw=1:nk=1 "$f")
             cod=$(ffprobe -v error -select_streams v:0 \
               -show_entries stream=codec_name -of default=nw=1:nk=1 "$f")
-            echo "$f -> codec=$cod pix=$pix dur=$dur"
+            w=$(ffprobe -v error -select_streams v:0 \
+              -show_entries stream=width -of default=nw=1:nk=1 "$f")
+            h=$(ffprobe -v error -select_streams v:0 \
+              -show_entries stream=height -of default=nw=1:nk=1 "$f")
+            echo "$f -> codec=$cod pix=$pix dur=$dur ${w}x${h}"
             if [ "$cod" != "h264" ] || [ "$pix" != "yuv420p" ] \
-               || [ -z "$dur" ] || [ "$dur" = "N/A" ] || [ "$dur" = "0.000000" ]; then
-              echo "::error file=$f::Invalid gift video (codec=$cod pix=$pix dur=$dur)"
+               || [ -z "$dur" ] || [ "$dur" = "N/A" ] || [ "$dur" = "0.000000" ] \
+               || [ $((w % 2)) -ne 0 ] || [ $((h % 2)) -ne 0 ]; then
+              echo "::error file=$f::Invalid gift video (codec=$cod pix=$pix dur=$dur ${w}x${h})"
               bad=1
             fi
           done
