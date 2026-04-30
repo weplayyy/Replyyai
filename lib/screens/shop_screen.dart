@@ -66,54 +66,51 @@ class _ShopScreenState extends State<ShopScreen>
   }
 
   // -------------------- TOP BAR --------------------
-Widget _topBar() {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    child: Row(
-      children: [
-        IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              color: Colors.white, size: 18),
-          onPressed: () => Navigator.maybePop(context),
-        ),
-        const SizedBox(width: 4),
-        const Text('Shop',
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold)),
-        const Spacer(),
-
-        /// ✅ FIXED STREAM BUILDER
-        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .doc(_uid)
-              .snapshots(),
-          builder: (_, s) {
-            final d = s.data?.data() ?? const {};
-            final coins = (d['coins'] ?? 0) as int;
-            final clanCoins = (d['clanCoins'] ?? 0) as int;
-
-            return Row(
-              children: [
-                _balancePill(_diamond, '💎', clanCoins),
-                const SizedBox(width: 6),
-                _balancePill(_gold, '⭐', coins),
-              ],
-            );
-          },
-        ),
-
-        IconButton(
-          icon: const Icon(Icons.shopping_bag_outlined,
-              color: Colors.white),
-          onPressed: () {},
-        ),
-      ],
-    ),
-  );
-}
+  Widget _topBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new,
+                color: Colors.white, size: 18),
+            onPressed: () => Navigator.maybePop(context),
+          ),
+          const SizedBox(width: 4),
+          const Text('Shop',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold)),
+          const Spacer(),
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(_uid)
+                .snapshots(),
+            builder: (_, s) {
+              final d = s.data?.data() ?? const {};
+              final coins = (d['coins'] ?? 0) as int;
+              final clanCoins = (d['clanCoins'] ?? 0) as int;
+              return Row(
+                children: [
+                  _balancePill(_diamond, '💎', clanCoins),
+                  const SizedBox(width: 6),
+                  _balancePill(_gold, '⭐', coins),
+                ],
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.shopping_bag_outlined,
+                color: Colors.white),
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const MyItemsScreen())),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _balancePill(Color color, String icon, int n) {
     return Container(
@@ -134,7 +131,8 @@ Widget _topBar() {
                   fontSize: 13)),
           const SizedBox(width: 4),
           Container(
-            width: 16, height: 16,
+            width: 16,
+            height: 16,
             decoration: BoxDecoration(
               color: color.withOpacity(0.25),
               borderRadius: BorderRadius.circular(8),
@@ -154,15 +152,13 @@ Widget _topBar() {
       isScrollable: true,
       labelColor: Colors.white,
       unselectedLabelColor: Colors.white60,
-      labelStyle: const TextStyle(
-          fontWeight: FontWeight.bold, fontSize: 14),
+      labelStyle:
+          const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
       unselectedLabelStyle: const TextStyle(fontSize: 14),
       indicatorColor: _purple,
       indicatorWeight: 3,
       indicatorSize: TabBarIndicatorSize.label,
-      tabs: _categories
-          .map((c) => Tab(text: kCategoryLabels[c]))
-          .toList(),
+      tabs: _categories.map((c) => Tab(text: kCategoryLabels[c])).toList(),
     );
   }
 
@@ -275,8 +271,8 @@ Widget _topBar() {
             const SizedBox(height: 16),
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 36, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 36, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.04),
                   borderRadius: BorderRadius.circular(28),
@@ -287,8 +283,7 @@ Widget _topBar() {
                   children: const [
                     Text('View More',
                         style: TextStyle(
-                            color: _purple,
-                            fontWeight: FontWeight.w600)),
+                            color: _purple, fontWeight: FontWeight.w600)),
                     SizedBox(width: 4),
                     Icon(Icons.keyboard_arrow_down, color: _purple),
                   ],
@@ -303,11 +298,11 @@ Widget _topBar() {
   }
 
   Widget _itemCard(ShopItem item, int ownedQty) {
-        final isClan = item.currency == ShopCurrency.clanCoins;
+    final isClan = item.currency == ShopCurrency.clanCoins;
     final currColor = isClan ? _diamond : _gold;
     final currIcon = isClan ? '💎' : '⭐';
 
-        return GestureDetector(
+    return GestureDetector(
       onTap: () => _openItemSheet(item, ownedQty),
       child: Container(
         decoration: BoxDecoration(
@@ -332,16 +327,15 @@ Widget _topBar() {
                         ),
                       ),
                       child: Center(
-                        child: Text(
-                          item.emoji,
-                          style: const TextStyle(fontSize: 56),
-                        ),
+                        child: Text(item.emoji,
+                            style: const TextStyle(fontSize: 56)),
                       ),
                     ),
                   ),
                   if (item.badge != null)
                     Positioned(
-                      left: 8, top: 8,
+                      left: 8,
+                      top: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
@@ -366,13 +360,15 @@ Widget _topBar() {
                       ),
                     ),
                   Positioned(
-                    right: 6, top: 6,
+                    right: 6,
+                    top: 6,
                     child: Icon(Icons.favorite_border,
                         color: Colors.white.withOpacity(0.7), size: 18),
                   ),
                   if (ownedQty > 0)
                     Positioned(
-                      right: 6, bottom: 6,
+                      right: 6,
+                      bottom: 6,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
@@ -403,8 +399,7 @@ Widget _topBar() {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Text(currIcon,
-                          style: const TextStyle(fontSize: 13)),
+                      Text(currIcon, style: const TextStyle(fontSize: 13)),
                       const SizedBox(width: 4),
                       Text(_fmt(item.price),
                           style: TextStyle(
@@ -424,58 +419,152 @@ Widget _topBar() {
 
   // -------------------- BOTTOM NAV --------------------
   Widget _bottomNav() {
-  Widget item(IconData icon, String label,
-      {bool selected = false, VoidCallback? onTap}) {
-    final color = selected ? _purple : Colors.white60;
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          decoration: selected
-              ? BoxDecoration(
-                  color: _purple.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(16),
-                )
-              : null,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(height: 2),
-              Text(label,
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600)),
-            ],
+    Widget item(IconData icon, String label,
+        {bool selected = false, VoidCallback? onTap}) {
+      final color = selected ? _purple : Colors.white60;
+      return Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            decoration: selected
+                ? BoxDecoration(
+                    color: _purple.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16),
+                  )
+                : null,
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(height: 2),
+                Text(label,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
+              ],
+            ),
           ),
         ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          item(Icons.shopping_bag, 'Shop', selected: true, onTap: () {}),
+          item(Icons.inventory_2_outlined, 'My Items',
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const MyItemsScreen()))),
+          item(Icons.favorite, 'CP Inbox',
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const CpInboxScreen()))),
+          item(Icons.diamond_outlined, 'Top Up', onTap: () {}),
+        ],
       ),
     );
   }
 
-  return Container(
-    margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-    decoration: BoxDecoration(
-      color: _card,
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Row(
-      children: [
-        item(Icons.shopping_bag, 'Shop', selected: true, onTap: () {}),
-        item(Icons.inventory_2_outlined, 'My Items',
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const MyItemsScreen()))),
-        item(Icons.favorite, 'CP Inbox',
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const CpInboxScreen()))),
-        item(Icons.diamond_outlined, 'Top Up', onTap: () {}),
-      ],
-    ),
-  );
+  // -------------------- ITEM SHEET (Buy / Use) --------------------
+  void _openItemSheet(ShopItem item, int ownedQty) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(item.emoji, style: const TextStyle(fontSize: 60)),
+              const SizedBox(height: 10),
+              Text(item.name,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text('Owned: x$ownedQty',
+                  style: const TextStyle(color: Colors.white60)),
+              const SizedBox(height: 18),
+              if (ownedQty > 0) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      if (item.type == ShopItemType.ring ||
+                          item.type == ShopItemType.tag) {
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => UseItemPickerScreen(item: item),
+                        ));
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Equip coming soon')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.check_circle, color: Colors.white),
+                    label: Text(
+                      item.type == ShopItemType.ring
+                          ? 'Use to Propose'
+                          : item.type == ShopItemType.tag
+                              ? 'Use / Send Tag'
+                              : 'Use',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF22C55E),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _confirmBuy(item);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _purple,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  child: Text(
+                    ownedQty > 0
+                        ? 'Buy another (${_fmt(item.price)})'
+                        : 'Buy for ${_fmt(item.price)}',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
+
   // -------------------- BUY --------------------
   Future<void> _confirmBuy(ShopItem item) async {
     final currName =
@@ -495,8 +584,7 @@ Widget _topBar() {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Buy',
-                style: TextStyle(color: _purple)),
+            child: const Text('Buy', style: TextStyle(color: _purple)),
           ),
         ],
       ),
