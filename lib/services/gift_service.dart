@@ -35,6 +35,30 @@ class GiftService {
     return (luckyCoins: _rng.nextInt(price + 1), jackpot: false);
   }
 
+  /// Upsert the sender as a "guardian" of the receiver and bump
+  /// their cumulative charm contribution. Used to populate the
+  /// Guardians strip on the profile page (top gifters).
+  Future<void> _upsertGuardian({
+    required String fromUid,
+    required String toUid,
+    required int charms,
+  }) async {
+    final senderSnap = await _db.collection('users').doc(fromUid).get();
+    final s = senderSnap.data() ?? {};
+    final guardianRef = _db
+        .collection('users')
+        .doc(toUid)
+        .collection('guardians')
+        .doc(fromUid);
+    await guardianRef.set({
+      'uid': fromUid,
+      'displayName': s['displayName'] ?? 'User',
+      'photoURL': s['photoURL'],
+      'totalCharms': FieldValue.increment(charms),
+      'lastGiftAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   Future<GiftSendResult> sendGift({
     required String fromUid,
     required String toUid,
@@ -68,6 +92,9 @@ class GiftService {
         'level': 1 + (newReceiverCharms ~/ 100),
       });
     });
+
+    // Track guardian (top gifters by charms contributed).
+    await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
 
     final chatRef = _db.collection('chats').doc(_chatId(fromUid, toUid));
     await chatRef.set({
@@ -132,6 +159,9 @@ class GiftService {
         'level': 1 + (newReceiverCharms ~/ 100),
       });
     });
+
+    // Track guardian (top gifters by charms contributed).
+    await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
 
     await _db
         .collection('rooms')
