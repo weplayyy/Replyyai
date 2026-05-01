@@ -644,6 +644,54 @@ class _RoomScreenState extends State<RoomScreen>
     );
   }
 
+  Widget _buildSenderName(RoomMessage m) {
+  final partner = m.senderCpPartnerName;
+  final status  = m.senderCpStatus;
+  final showCp  = partner != null &&
+      partner.isNotEmpty &&
+      (status == 'engaged' || status == 'married');
+
+  if (!showCp) {
+    return Text(
+      m.senderName,
+      style: const TextStyle(
+        color: Colors.white70,
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  final icon = status == 'married' ? '💒' : '💍';
+
+  return RichText(
+    text: TextSpan(
+      children: [
+        TextSpan(
+          text: m.senderName,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        TextSpan(
+          text: ' $icon ',
+          style: const TextStyle(fontSize: 10),
+        ),
+        TextSpan(
+          text: partner,
+          style: const TextStyle(
+            color: Color(0xFFEC4899),
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ),
+  );
+  }
+
   Widget _chatBubble(RoomMessage m) {
     final isMe = m.senderId == _meUid;
     final isOwner = m.senderId == widget.room.ownerId;
@@ -716,24 +764,18 @@ class _RoomScreenState extends State<RoomScreen>
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             if (!isMe)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    m.senderName,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (isOwner) ...[
-                    const SizedBox(width: 4),
-                    const Icon(Icons.workspace_premium,
-                        color: Color(0xFFFBBF24), size: 11),
-                  ],
-                ],
-              ),
+  Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      // CP-aware sender name
+      _buildSenderName(m),
+      if (isOwner) ...[
+        const SizedBox(width: 4),
+        const Icon(Icons.workspace_premium,
+            color: Color(0xFFFBBF24), size: 11),
+      ],
+    ],
+  ),
             if (m.type == RoomMessageType.gift)
               Row(
                 mainAxisSize: MainAxisSize.min,
