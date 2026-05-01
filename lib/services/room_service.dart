@@ -284,6 +284,23 @@ class RoomService {
     return true;
   }
 
+    /// Called from the rooms list on open — sweeps any pending_delete rooms
+  /// whose deleteAt has passed and finalises them as deleted.
+  Future<void> cleanupExpiredRooms() async {
+    try {
+      final snap = await _rooms
+          .where('status', isEqualTo: 'pending_delete')
+          .get();
+      final now = DateTime.now();
+      for (final doc in snap.docs) {
+        final room = Room.fromMap(doc.id, doc.data());
+        if (room.deleteAt != null && room.deleteAt!.isBefore(now)) {
+          await autoDeleteIfExpired(doc.id);
+        }
+      }
+    } catch (_) {}
+  }
+
   // ---------------------------------------------------------------------------
   // MEMBERSHIP & PRESENCE
   // ---------------------------------------------------------------------------
