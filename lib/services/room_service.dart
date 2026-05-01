@@ -67,6 +67,39 @@ class RoomService {
     return ref.id;
   }
 
+    /// Creates an advanced room. Deducts 2,000 coins atomically with room
+  /// creation — throws if the balance is insufficient.
+  Future<String> createAdvancedRoom(Room room) async {
+    final userSnap = await _db.collection('users').doc(_me).get();
+    final coins    = (userSnap.data()?['coins'] ?? 0) as int;
+    if (coins < 2000) {
+      throw Exception(
+          'Not enough coins — you need 2,000 for an Advanced Room (you have $coins).');
+    }
+
+    final ref   = _rooms.doc();
+    final m     = userSnap.data() ?? {};
+    final batch = _db.batch();
+
+    batch.update(_db.collection('users').doc(_me), {
+      'coins': FieldValue.increment(-2000),
+    });
+    batch.set(ref, room.toCreateMap());
+    batch.set(ref.collection('members').doc(_me), {
+      'uid':          _me,
+      'displayName':  m['displayName'] ?? 'Owner',
+      'photoUrl':     m['photoURL'],
+      'charms':       m['charms'] ?? 0,
+      'role':         RoomRole.owner.toRaw(),
+      'joinedAt':     FieldValue.serverTimestamp(),
+      'isPresent':    true,
+      'lastActiveAt': FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+    return ref.id;
+  }
+
   /// Soft delete — flips status. Cleanup of subcollections happens via
   /// the scheduled function (Slice 5).
   Future<void> deleteRoom(String roomId) async {
