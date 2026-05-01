@@ -381,30 +381,48 @@ class CpService {
           'You must be engaged for at least 7 days before marrying');
     }
 
-    final partnerUid = _getPartnerUid(data, myUid);
-    final now        = FieldValue.serverTimestamp();
-    final batch      = _db.batch();
+    // ② Already in a CP guard — sender
+final partnerUid   = (me['cpPartnerUid'] as String?) ?? '';
+final coupleId     = (me['cpCoupleId']   as String?) ?? '';
+final hasRealCp    = partnerUid.isNotEmpty && coupleId.isNotEmpty;
+final hasBrokenCp  = partnerUid.isNotEmpty && coupleId.isEmpty;
 
-    batch.update(coupleRef, {
-      'status':          CpStatus.married.toRaw(),
-      'marriedAt':       now,
-      'anniversaryDate': now,
-    });
-
-    batch.update(_users.doc(myUid),      {'cpStatus': CpStatus.married.toRaw()});
-    batch.update(_users.doc(partnerUid), {'cpStatus': CpStatus.married.toRaw()});
-    await batch.commit();
-
-    await _notify(
-      toUid:    partnerUid,
-      type:     'cp_married',
-      title:    '💒 You Are Married!',
-      body:     'Congratulations! Your relationship has levelled up to married.',
-      fromUid:  myUid,
-      coupleId: coupleId,
-    );
+if (hasRealCp) {
+  // Verify the couple doc actually exists — guard against orphaned user fields
+  final coupleSnap = await _couples.doc(coupleId).get();
+  if (coupleSnap.exists) {
+    throw AlreadyInCpException(
+        "You're already in a CP. Break up first before proposing.");
   }
+  // Couple doc is gone but user fields still set — auto-heal below
+}
 
+if (hasRealCp || hasBrokenCp) {
+  // Check if the couple document is actually still there
+  final realCoupleExists = coupleId.isNotEmpty &&
+      (await _couples.doc(coupleId).get()).exists;
+
+  if (!realCoupleExists) {
+    // Auto-heal: stale/orphaned CP fields — wipe them and let the proposal go through
+    await _users.doc(fromUid).update({
+      'cpPartnerUid':   FieldValue.delete(),
+      'cpPartnerName':  FieldValue.delete(),
+      'cpPartnerPhoto': FieldValue.delete(),
+      'cpRingId':       FieldValue.delete(),
+      'cpSince':        FieldValue.delete(),
+      'cpCoupleId':     FieldValue.delete(),
+      'cpStatus':       FieldValue.delete(),
+    });
+    // Refresh me after healing
+    final healed = await _users.doc(fromUid).get();
+    me.clear();
+    me.addAll(healed.data() ?? {});
+  } else {
+    throw AlreadyInCpException(
+        "You're already in a CP. Break up first before proposing.");
+  }
+}
+    
   // ─── MUTUAL DIVORCE REQUEST ──────────────────────────────────────────────────
 
   /// Step 1: request a divorce (stored in /couples/{id}/divorce_requests/{uid}).
