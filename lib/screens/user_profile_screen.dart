@@ -456,17 +456,19 @@ class UserProfileScreen extends StatelessWidget {
 
   // ---------- CP PARTNER ----------
     Widget _cpPartnerCard(BuildContext context, AppUser u) {
-    final has = (u.cpPartnerUid ?? '').isNotEmpty;
-    return _shell(
-      onTap: has
-          ? () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      CoupleProfileScreen(coupleId: u.cpCoupleId!),
-                ),
-              )
-          : null,
+  // Guard BOTH fields — don't navigate if either is missing
+  final has = (u.cpPartnerUid ?? '').isNotEmpty && u.cpCoupleId != null;
+  return _shell(
+    onTap: has
+        ? () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    CoupleProfileScreen(coupleId: u.cpCoupleId!), // safe now
+              ),
+            )
+        : null,
+    // ... rest stays the same
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(
