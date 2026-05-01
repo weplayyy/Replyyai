@@ -13,113 +13,167 @@ class CoupleProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final myUid = FirebaseAuth.instance.currentUser!.uid;
+    final user = FirebaseAuth.instance.currentUser;
+
+if (user == null) {
+  return const Scaffold(
+    body: Center(
+      child: Text(
+        'User not logged in',
+        style: TextStyle(color: Colors.white),
+      ),
+    ),
+  );
+}
+
+final myUid = user.uid;
     return Scaffold(
       backgroundColor: _bg,
       body: StreamBuilder<Map<String, dynamic>?>(
         stream: CpService().watchCouple(coupleId),
         builder: (_, snap) {
-          if (!snap.hasData) {
-            return const Center(
-                child: CircularProgressIndicator(color: _pink));
-          }
-          final couple = snap.data;
-          if (couple == null) {
-            return const Center(
-                child: Text('Couple not found',
-                    style: TextStyle(color: Colors.white70)));
-          }
+  try {
+    if (snap.hasError) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Text(
+            'Error:\n${snap.error}',
+            style: const TextStyle(color: Colors.red),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
 
-          final a          = (couple['partnerA'] as Map?) ?? {};
-          final b          = (couple['partnerB'] as Map?) ?? {};
-          final status     = CpStatusX.fromRaw(couple['status'] as String?);
-          final since      = (couple['engagedAt'] as Timestamp?)?.toDate();
-          final married    = (couple['marriedAt'] as Timestamp?)?.toDate();
-          final level      = (couple['level'] ?? 1) as int;
-          final lovePoints = (couple['lovePoints'] ?? 0) as int;
-          final xp         = (couple['xp'] ?? 0) as int;
-          final trust      = (couple['trustScore'] ?? 50) as int;
-          final sharedBio  = (couple['sharedBio'] ?? '') as String;
-          final gifts      = (couple['giftsExchanged'] ?? 0) as int;
-          final daysTogether = since == null
-              ? 0
-              : DateTime.now().difference(since).inDays;
-          final partnerIsA = (a['uid'] as String?) == myUid;
-          final me      = partnerIsA ? a : b;
-          final partner = partnerIsA ? b : a;
+    if (!snap.hasData) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-          return CustomScrollView(
-            slivers: [
-              SliverAppBar(
-                expandedHeight: 300,
-                pinned: true,
-                backgroundColor: _bg,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: _HeroHeader(
-                    me: me,
-                    partner: partner,
-                    status: status,
-                    daysTogether: daysTogether,
-                    married: married,
+    final couple = snap.data;
+
+    if (couple == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'Couple not found',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+    }
+
+    final a = Map<String, dynamic>.from(couple['partnerA'] ?? {});
+    final b = Map<String, dynamic>.from(couple['partnerB'] ?? {});
+
+    final statusRaw = couple['status'] as String?;
+    final status = CpStatusX.fromRaw(statusRaw ?? 'engaged');
+
+    final since      = (couple['engagedAt'] as Timestamp?)?.toDate();
+    final married    = (couple['marriedAt'] as Timestamp?)?.toDate();
+    final level      = (couple['level'] ?? 1) as int;
+    final lovePoints = (couple['lovePoints'] ?? 0) as int;
+    final xp         = (couple['xp'] ?? 0) as int;
+    final trust      = (couple['trustScore'] ?? 50) as int;
+    final sharedBio  = (couple['sharedBio'] ?? '') as String;
+    final gifts      = (couple['giftsExchanged'] ?? 0) as int;
+
+    final daysTogether = since == null
+        ? 0
+        : DateTime.now().difference(since).inDays;
+
+    final partnerIsA = (a['uid'] as String?) == myUid;
+    final me      = partnerIsA ? a : b;
+    final partner = partnerIsA ? b : a;
+
+    return CustomScrollView(
+      slivers: [
+        SliverAppBar(
+          expandedHeight: 300,
+          pinned: true,
+          backgroundColor: _bg,
+          flexibleSpace: FlexibleSpaceBar(
+            background: _HeroHeader(
+              me: me,
+              partner: partner,
+              status: status,
+              daysTogether: daysTogether,
+              married: married,
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              _StatsRow(
+                level: level,
+                love: lovePoints,
+                xp: xp,
+                gifts: gifts,
+                trust: trust,
+              ),
+              const SizedBox(height: 16),
+              _SharedBioCard(
+                myUid: myUid,
+                coupleId: coupleId,
+                bio: sharedBio,
+              ),
+              const SizedBox(height: 16),
+              _MilestonesSection(coupleId: coupleId),
+              const SizedBox(height: 16),
+              _MissionsSection(coupleId: coupleId),
+              const SizedBox(height: 24),
+              if (status == CpStatus.conflict)
+                _DivorceResponseCard(
+                  myUid: myUid,
+                  coupleId: coupleId,
+                ),
+              if (status != CpStatus.conflict) ...[
+                if (status == CpStatus.engaged)
+                  _ActionButton(
+                    label: 'Get Married 💒',
+                    color: _pink,
+                    onTap: () =>
+                        _marry(context, myUid, coupleId),
                   ),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.all(16),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    _StatsRow(
-                        level: level,
-                        love: lovePoints,
-                        xp: xp,
-                        gifts: gifts,
-                        trust: trust),
-                    const SizedBox(height: 16),
-                    _SharedBioCard(
-                        myUid: myUid,
-                        coupleId: coupleId,
-                        bio: sharedBio),
-                    const SizedBox(height: 16),
-                    _MilestonesSection(coupleId: coupleId),
-                    const SizedBox(height: 16),
-                    _MissionsSection(coupleId: coupleId),
-                    const SizedBox(height: 24),
-                    if (status == CpStatus.conflict)
-                      _DivorceResponseCard(
-                          myUid: myUid, coupleId: coupleId),
-                    if (status != CpStatus.conflict) ...[
-                      if (status == CpStatus.engaged)
-                        _ActionButton(
-                          label: 'Get Married 💒',
-                          color: _pink,
-                          onTap: () =>
-                              _marry(context, myUid, coupleId),
-                        ),
-                      if (status == CpStatus.married)
-                        _ActionButton(
-                          label: 'Request Divorce 💔',
-                          color: Colors.redAccent,
-                          onTap: () =>
-                              _requestDivorce(context, myUid, coupleId),
-                        ),
-                      if (status == CpStatus.engaged)
-                        _ActionButton(
-                          label: 'Break Engagement',
-                          color: Colors.grey.shade700,
-                          onTap: () =>
-                              _break(context, myUid, coupleId),
-                        ),
-                    ],
-                    const SizedBox(height: 40),
-                  ]),
-                ),
-              ),
-            ],
-          );
-        },
+                if (status == CpStatus.married)
+                  _ActionButton(
+                    label: 'Request Divorce 💔',
+                    color: Colors.redAccent,
+                    onTap: () =>
+                        _requestDivorce(context, myUid, coupleId),
+                  ),
+                if (status == CpStatus.engaged)
+                  _ActionButton(
+                    label: 'Break Engagement',
+                    color: Colors.grey,
+                    onTap: () =>
+                        _break(context, myUid, coupleId),
+                  ),
+              ],
+              const SizedBox(height: 40),
+            ]),
+          ),
+        ),
+      ],
+    );
+
+  } catch (e, stack) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Text(
+          'CRASH:\n$e\n\n$stack',
+          style: const TextStyle(color: Colors.red),
+        ),
       ),
     );
   }
+        }
 
   // ── Marriage ────────────────────────────────────────────────────────────────
 
