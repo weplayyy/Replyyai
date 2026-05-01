@@ -29,6 +29,11 @@ class AppUser {
   final String? cpRingId;
   final DateTime? cpSince;
 
+  final String? cpPartnerPhoto;
+  final String? cpCoupleId;
+  final String? cpStatus;
+  final DateTime? cpDivorceCooldownUntil;
+
   // Equipped tags (max 3)
   final List<String> activeTags;
 
@@ -54,6 +59,10 @@ class AppUser {
     this.followingCount = 0,
     this.clanId,
     this.clanName,
+    this.cpPartnerPhoto,
+    this.cpCoupleId,
+    this.cpStatus,
+    this.cpDivorceCooldownUntil,
     this.clanRole,
     this.cpPartnerUid,
     this.cpPartnerName,
@@ -100,6 +109,10 @@ class AppUser {
       cpPartnerName: m['cpPartnerName'] as String?,
       cpRingId: m['cpRingId'] as String?,
       cpSince: _ts(m['cpSince']),
+      cpPartnerPhoto: m['cpPartnerPhoto'] as String?,
+      cpCoupleId: m['cpCoupleId'] as String?,
+      cpStatus: m['cpStatus'] as String?,
+      cpDivorceCooldownUntil: _ts(m['cpDivorceCooldownUntil']),
       activeTags: ((m['activeTags'] as List?) ?? const [])
           .map((e) => e.toString())
           .toList(),
@@ -130,6 +143,11 @@ class AppUser {
         'cpPartnerName': cpPartnerName,
         'cpRingId': cpRingId,
         if (cpSince != null) 'cpSince': cpSince,
+            'cpPartnerPhoto': cpPartnerPhoto,
+        'cpCoupleId': cpCoupleId,
+        'cpStatus': cpStatus,
+        if (cpDivorceCooldownUntil != null)
+       'cpDivorceCooldownUntil': cpDivorceCooldownUntil,
         'activeTags': activeTags,
         'activity': activity,
       };
