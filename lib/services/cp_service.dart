@@ -662,4 +662,57 @@ class CpService {
         ? ((coupleData['partnerB'] as Map?)?['uid'] as String? ?? '')
         : a;
   }
+    // ─── BREAK ENGAGEMENT ────────────────────────────────────────────────────────
+
+  /// Instant break — only allowed while status is 'engaged'.
+  /// Married couples must use the divorce flow instead.
+  Future<void> breakEngagement({
+    required String myUid,
+    required String coupleId,
+  }) async {
+    final coupleSnap = await _couples.doc(coupleId).get();
+    if (!coupleSnap.exists) throw Exception('Couple not found');
+    final data   = coupleSnap.data()!;
+    final status = CpStatusX.fromRaw(data['status'] as String?);
+
+    if (status == CpStatus.married) {
+      throw Exception(
+          'Married couples must use the divorce system.');
+    }
+
+    final partnerUid  = _getPartnerUid(data, myUid);
+    final meSnap      = await _users.doc(myUid).get();
+    final me          = meSnap.data() ?? {};
+    final cooldownEnd = DateTime.now().add(const Duration(days: 7));
+
+    final batch = _db.batch();
+    batch.update(_couples.doc(coupleId), {
+      'status':    CpStatus.divorced.toRaw(),
+      'divorceAt': FieldValue.serverTimestamp(),
+    });
+    for (final uid in [myUid, partnerUid]) {
+      batch.update(_users.doc(uid), {
+        'cpPartnerUid':           FieldValue.delete(),
+        'cpPartnerName':          FieldValue.delete(),
+        'cpPartnerPhoto':         FieldValue.delete(),
+        'cpRingId':               FieldValue.delete(),
+        'cpSince':                FieldValue.delete(),
+        'cpCoupleId':             FieldValue.delete(),
+        'cpStatus':               FieldValue.delete(),
+        'cpDivorceCooldownUntil': Timestamp.fromDate(cooldownEnd),
+      });
+    }
+    await batch.commit();
+
+    await _notify(
+      toUid:     partnerUid,
+      type:      'cp_breakup',
+      title:     '💔 Engagement Broken',
+      body:      '${me['displayName'] ?? 'Your partner'} has ended the engagement.',
+      fromUid:   myUid,
+      fromName:  me['displayName'] as String?,
+      fromPhoto: me['photoURL'] as String?,
+      coupleId:  coupleId,
+    );
+  }
 }
