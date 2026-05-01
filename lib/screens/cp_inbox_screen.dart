@@ -12,49 +12,184 @@ class CpInboxScreen extends StatelessWidget {
   static const _purple = Color(0xFF7C5CFF);
   static const _pink = Color(0xFFEC4899);
 
+  // Add this StreamBuilder tab inside CpInboxScreen's Scaffold body
+// as a TabBarView with two tabs: "Received" and "Sent"
+
+class CpInboxScreen extends StatelessWidget {
+  const CpInboxScreen({super.key});
+  // ... (keep existing constants)
+
   @override
   Widget build(BuildContext context) {
     final me = FirebaseAuth.instance.currentUser!;
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
         backgroundColor: _bg,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('CP Proposals',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(me.uid)
-            .collection('cp_proposals')
-            .snapshots(),
-        builder: (_, snap) {
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator(color: _purple));
-          }
-          final docs = snap.data!.docs.toList()
-            ..sort((a, b) {
-              final ta = a.data()['createdAt'] as Timestamp?;
-              final tb = b.data()['createdAt'] as Timestamp?;
-              if (ta == null && tb == null) return 0;
-              if (ta == null) return 1;
-              if (tb == null) return -1;
-              return tb.compareTo(ta);
-            });
-          if (docs.isEmpty) return _empty();
-          return ListView.separated(
-            padding: const EdgeInsets.all(14),
-            itemCount: docs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (_, i) => _proposalCard(context, me.uid, docs[i]),
-          );
-        },
+        appBar: AppBar(
+          backgroundColor: _bg,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+          title: const Text('CP Proposals',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          bottom: const TabBar(
+            labelColor: Color(0xFFEC4899),
+            unselectedLabelColor: Colors.white54,
+            indicatorColor: Color(0xFFEC4899),
+            tabs: [
+              Tab(text: 'Received'),
+              Tab(text: 'Sent'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _ReceivedProposalsTab(myUid: me.uid),
+            _SentProposalTab(myUid: me.uid),    // NEW
+          ],
+        ),
       ),
     );
   }
+}
 
+/// NEW widget — shows the one outgoing proposal the user may have sent.
+class _SentProposalTab extends StatelessWidget {
+  final String myUid;
+  const _SentProposalTab({required this.myUid});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(myUid)
+          .snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF7C5CFF)));
+        }
+        final data  = snap.data!.data() ?? {};
+        final toUid  = data['cpSentProposalTo'] as String?;
+        final toName = data['cpSentProposalToName'] as String?;
+        final toPhoto = data['cpSentProposalToPhoto'] as String?;
+        final sentAt = data['cpSentProposalAt'] as Timestamp?;
+
+        if (toUid == null || toUid.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text('💌', style: TextStyle(fontSize: 48)),
+                SizedBox(height: 12),
+                Text("You haven't sent any proposal",
+                    style: TextStyle(color: Colors.white70, fontSize: 16)),
+              ],
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF181028),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFEC4899).withOpacity(0.3)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircleAvatar(
+                  radius: 32,
+                  backgroundImage: toPhoto != null ? NetworkImage(toPhoto) : null,
+                  backgroundColor: Colors.white12,
+                  child: toPhoto == null
+                      ? Text(toName?[0].toUpperCase() ?? '?',
+                          style: const TextStyle(color: Colors.white, fontSize: 18))
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Proposal sent to $toName',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold),
+                ),
+                if (sentAt != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Sent ${_formatTime(sentAt.toDate())}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                const Text(
+                  'Waiting for their response...',
+                  style: TextStyle(color: Colors.white54),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () => _cancel(context, myUid, toUid, toName ?? ''),
+                  icon: const Icon(Icons.close, color: Colors.white70),
+                  label: const Text('Cancel Proposal',
+                      style: TextStyle(color: Colors.white70)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white24),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24)   return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  Future<void> _cancel(
+      BuildContext context, String myUid, String toUid, String toName) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF181028),
+        title: const Text('Cancel Proposal?',
+            style: TextStyle(color: Colors.white)),
+        content: Text('Cancel your proposal to $toName?',
+            style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yes, Cancel',
+                style: TextStyle(color: Color(0xFFEC4899))),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !context.mounted) return;
+    await CpService().cancelProposal(fromUid: myUid, toUid: toUid);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Proposal cancelled')),
+      );
+    }
+  }
+}
+  
   Widget _proposalCard(
     BuildContext context,
     String myUid,
