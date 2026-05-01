@@ -52,6 +52,39 @@ class GiftService {
       'lastGiftAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+    // Called after every gift. If sender and receiver are CP partners,
+  // the charm value is added to their couple's cpGrowthCharms field.
+  Future<void> _updateCpGrowth({
+    required String fromUid,
+    required String toUid,
+    required int charms,
+  }) async {
+    try {
+      final senderSnap = await _db.collection('users').doc(fromUid).get();
+      final senderData = senderSnap.data() ?? {};
+      final coupleId   = senderData['cpCoupleId'] as String?;
+      if (coupleId == null || coupleId.isEmpty) return;
+
+      final coupleRef  = _db.collection('couples').doc(coupleId);
+      final coupleSnap = await coupleRef.get();
+      final coupleData = coupleSnap.data() ?? {};
+
+      // Verify receiver is the other partner in this couple
+      final uid1 = coupleData['uid1'] as String?;
+      final uid2 = coupleData['uid2'] as String?;
+      final isPartner = (uid1 == fromUid && uid2 == toUid) ||
+                        (uid2 == fromUid && uid1 == toUid);
+      if (!isPartner) return;
+
+      // Accumulate growth on the couple doc
+      await coupleRef.update({
+        'cpGrowthCharms': FieldValue.increment(charms),
+        'lastGrowthAt':   FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      // Non-critical — never block a gift because of CP growth failure
+    }
+  }
 
   Future<GiftSendResult> sendGift({
     required String fromUid,
@@ -85,7 +118,8 @@ class GiftService {
     });
 
     await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
-
+        await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
+    await _updateCpGrowth(fromUid: fromUid, toUid: toUid, charms: charms);
     final chatRef = _db.collection('chats').doc(_chatId(fromUid, toUid));
     await chatRef.set({
       'participants': [fromUid, toUid],
