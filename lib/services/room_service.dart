@@ -475,15 +475,17 @@ class RoomService {
     final me = await _db.collection('users').doc(_me).get();
     final m = me.data() ?? {};
     await _rooms.doc(roomId).collection('messages').add({
-      'type': 'text',
-      'text': text.trim(),
-      'senderId': _me,
-      'senderName': m['displayName'] ?? 'User',
-      'senderPhoto': m['photoURL'],
-      'senderCharms': m['charms'] ?? 0,
-      'hiddenFor': <String>[],
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+  'type': 'text',
+  'text': text.trim(),
+  'senderId': _me,
+  'senderName': m['displayName'] ?? 'User',
+  'senderPhoto': m['photoURL'],
+  'senderCharms': m['charms'] ?? 0,
+  'senderCpPartnerName': m['cpPartnerName'],   // NEW
+  'senderCpStatus': m['cpStatus'],             // NEW
+  'hiddenFor': <String>[],
+  'createdAt': FieldValue.serverTimestamp(),
+});
   }
 
   /// Append my uid to a message's hiddenFor — invisible only to me.
