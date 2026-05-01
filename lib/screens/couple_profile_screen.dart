@@ -30,8 +30,8 @@ class CoupleProfileScreen extends StatelessWidget {
                     style: TextStyle(color: Colors.white70)));
           }
 
-          final a          = couple['partnerA'] as Map;
-          final b          = couple['partnerB'] as Map;
+          final a          = (couple['partnerA'] as Map?) ?? {};
+          final b          = (couple['partnerB'] as Map?) ?? {};
           final status     = CpStatusX.fromRaw(couple['status'] as String?);
           final since      = (couple['engagedAt'] as Timestamp?)?.toDate();
           final married    = (couple['marriedAt'] as Timestamp?)?.toDate();
@@ -44,7 +44,7 @@ class CoupleProfileScreen extends StatelessWidget {
           final daysTogether = since == null
               ? 0
               : DateTime.now().difference(since).inDays;
-          final partnerIsA = (a['uid'] as String) == myUid;
+          final partnerIsA = (a['uid'] as String?) == myUid;
           final me      = partnerIsA ? a : b;
           final partner = partnerIsA ? b : a;
 
@@ -394,7 +394,7 @@ class _HeroHeader extends StatelessWidget {
               ? NetworkImage(photo)
               : null,
       child: (photo == null || photo.isEmpty)
-          ? Text(name[0].toUpperCase(),
+          ?  : Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 24,
