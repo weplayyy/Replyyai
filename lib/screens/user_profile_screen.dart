@@ -8,6 +8,7 @@ import '../services/user_service.dart';
 import '../services/gift_service.dart';
 import 'gift_picker.dart';
 import 'chat_screen.dart';
+import 'couple_profile_screen.dart';
 
 Future<void> openUserProfileScreen(
   BuildContext context, {
@@ -454,10 +455,18 @@ class UserProfileScreen extends StatelessWidget {
   }
 
   // ---------- CP PARTNER ----------
-  Widget _cpPartnerCard(BuildContext context, AppUser u) {
+    Widget _cpPartnerCard(BuildContext context, AppUser u) {
     final has = (u.cpPartnerUid ?? '').isNotEmpty;
     return _shell(
-      onTap: () {},
+      onTap: has
+          ? () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      CoupleProfileScreen(coupleId: u.cpCoupleId!),
+                ),
+              )
+          : null,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(
