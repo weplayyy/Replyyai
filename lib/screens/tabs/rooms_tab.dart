@@ -323,7 +323,6 @@ class _RoomsTabState extends State<RoomsTab> {
           context, MaterialPageRoute(builder: (_) => RoomScreen(room: r))),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(isAdv ? 0 : 0),
         decoration: BoxDecoration(
           // Gold shimmer border for advanced rooms.
           gradient: isAdv
