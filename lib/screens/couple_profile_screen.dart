@@ -161,7 +161,7 @@ final myUid = user.uid;
       ],
     );
 
-  } catch (e, stack) {
+    } catch (e, stack) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SingleChildScrollView(
@@ -173,7 +173,12 @@ final myUid = user.uid;
       ),
     );
   }
-        }
+        },      // ← closes builder: (_, snap) {
+      ),        // ← closes StreamBuilder(
+    );          // ← closes return Scaffold(
+  }             // ← closes build(BuildContext context) {
+
+  // ── Marriage ────────────────
 
   // ── Marriage ────────────────────────────────────────────────────────────────
 
