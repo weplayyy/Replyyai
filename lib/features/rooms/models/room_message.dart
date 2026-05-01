@@ -26,6 +26,8 @@ class RoomMessage {
   final String senderName;
   final String? senderPhoto;
   final int senderCharms;
+  final String? senderCpPartnerName;
+  final String? senderCpStatus;
 
   final String? giftId;
   final String? giftName;
@@ -47,6 +49,8 @@ class RoomMessage {
     required this.senderName,
     required this.senderPhoto,
     required this.senderCharms,
+    this.senderCpPartnerName,
+    this.senderCpStatus,
     this.giftId,
     this.giftName,
     this.giftIcon,
@@ -69,6 +73,8 @@ class RoomMessage {
       senderName: (m['senderName'] ?? 'User') as String,
       senderPhoto: m['senderPhoto'] as String?,
       senderCharms: (m['senderCharms'] ?? 0) as int,
+      senderCpPartnerName: m['senderCpPartnerName'] as String?,
+      senderCpStatus: m['senderCpStatus'] as String?,
       giftId: m['giftId'] as String?,
       giftName: m['giftName'] as String?,
       giftIcon: m['giftIcon'] as String?,
