@@ -35,9 +35,16 @@ class RoomsTab extends StatefulWidget {
 }
 
 class _RoomsTabState extends State<RoomsTab> {
-  final _svc = RoomService();
+  final _svc      = RoomService();
   String _category  = 'All';
   String _subFilter = 'All Rooms';
+
+  @override
+  void initState() {
+    super.initState();
+    // Sweep expired temporary rooms every time the tab loads.
+    _svc.cleanupExpiredRooms();
+  }
 
   @override
   Widget build(BuildContext context) {
