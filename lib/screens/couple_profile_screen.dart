@@ -393,8 +393,8 @@ class _HeroHeader extends StatelessWidget {
           photo != null && photo.isNotEmpty
               ? NetworkImage(photo)
               : null,
-      child: (photo == null || photo.isEmpty)
-          ?  : Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
+            child: (photo == null || photo.isEmpty)
+          ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 24,
