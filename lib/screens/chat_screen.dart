@@ -340,57 +340,189 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  Widget _giftBubble(Message m, bool mine) {
-    final priceText = '🪙 ${m.giftPrice ?? 0}';
-    return Align(
-      alignment: Alignment.center,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0x55EC4899), Color(0x558B5CF6)],
-          ),
-          border: Border.all(color: const Color(0xFFEC4899).withOpacity(0.5)),
-          borderRadius: BorderRadius.circular(16),
-        ),
+  String _formatTime(Timestamp? ts) {
+  if (ts == null) return '';
+  final dt = ts.toDate().toLocal();
+  final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+  final m = dt.minute.toString().padLeft(2, '0');
+  final ampm = dt.hour < 12 ? 'AM' : 'PM';
+  return '$h:$m $ampm';
+}
+
+Widget _giftBubble(Message m, bool mine) {
+  final gift        = _giftById(m.giftId);
+  final receiverName = mine ? widget.other.displayName : 'you';
+  final charms      = m.charms ?? (gift != null ? (gift.price * 0.3).round() : 0);
+  final description = gift?.description ?? 'A special gift 💜';
+  final timeStr     = _formatTime(m.createdAt);
+
+  return Align(
+    alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      constraints: const BoxConstraints(maxWidth: 310),
+      decoration: BoxDecoration(
+        color: const Color(0xFF130D2A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF6B21A8).withOpacity(0.6), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(m.giftIcon ?? '🎁', style: const TextStyle(fontSize: 40)),
-            const SizedBox(height: 4),
-            Text(
-              mine
-                  ? 'You sent ${m.giftName}'
-                  : '${widget.other.displayName} sent ${m.giftName}',
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              priceText,
-              style: const TextStyle(
-                color: Color(0xFFFBBF24),
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            if ((m.luckyCoins ?? 0) > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '🎰 Lucky +${m.luckyCoins} coins',
+            // ── Header row: "Gift sent" + timestamp ──
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  mine ? 'Gift sent' : 'Gift received',
                   style: const TextStyle(
-                    color: Color(0xFFFDE047),
-                    fontSize: 11,
+                    color: Color(0xFFA855F7),
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
                   ),
                 ),
+                Text(
+                  timeStr,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.45),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // ── Body row: icon + text ──
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Gift icon in glowing circle
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF9333EA), width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF9333EA).withOpacity(0.45),
+                        blurRadius: 14,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                    color: const Color(0xFF1E1040),
+                  ),
+                  child: ClipOval(
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: GiftIcon(id: m.giftId, fallbackEmoji: m.giftIcon, size: 36),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Right side text
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // "Sent YASHII 🍑 Diamond"
+                      RichText(
+                        text: TextSpan(
+                          style: const TextStyle(fontSize: 14, color: Colors.white),
+                          children: [
+                            TextSpan(text: mine ? 'Sent ' : 'From '),
+                            TextSpan(
+                              text: receiverName,
+                              style: const TextStyle(
+                                color: Color(0xFFFBBF24),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            TextSpan(text: '  ${m.giftName ?? 'Gift'}'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+
+                      // x1
+                      const Text(
+                        'x1',
+                        style: TextStyle(
+                          color: Color(0xFFFBBF24),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          height: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+
+                      // Description
+                      Text(
+                        description,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            // ── Footer: Charm gained ──
+            if (charms > 0) ...[
+              const SizedBox(height: 10),
+              const Divider(color: Color(0xFF6B21A8), thickness: 0.4, height: 1),
+              const SizedBox(height: 8),
+              RichText(
+                text: TextSpan(
+                  style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.55)),
+                  children: [
+                    const TextSpan(text: 'Receiver gained '),
+                    TextSpan(
+                      text: 'Charm +$charms',
+                      style: const TextStyle(
+                        color: Color(0xFFA855F7),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+            ],
+
+            // ── Lucky coins (jackpot) ──
+            if ((m.luckyCoins ?? 0) > 0) ...[
+              const SizedBox(height: 4),
+              RichText(
+                text: TextSpan(
+                  style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.55)),
+                  children: [
+                    TextSpan(text: m.jackpot ? '🎉 JACKPOT! Lucky ' : 'Lucky '),
+                    TextSpan(
+                      text: '+${m.luckyCoins} coins',
+                      style: const TextStyle(
+                        color: Color(0xFFFBBF24),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _composer() {
     return Container(
