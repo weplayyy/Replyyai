@@ -1,12 +1,36 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../models/app_user.dart';
-import '../../services/user_service.dart';
+import '../../models/charm_rank.dart';
 import '../../widgets/rank_badge.dart';
 import '../../widgets/rank_avatar_frame.dart';
 import '../chat_screen.dart';
+import '../../services/gift_service.dart';
+
+// ─── lightweight entry read directly from Firestore ──────────────────────────
+class _RE {
+  final String uid;
+  final String name;
+  final String? photo;
+  final bool verified;
+  final int charms;
+  final int daily;
+  final int weekly;
+
+  _RE.fromMap(Map<String, dynamic> m, String id)
+      : uid = id,
+        name = (m['displayName'] ?? 'User') as String,
+        photo = m['photoURL'] as String?,
+        verified = (m['isVerified'] ?? false) as bool,
+        charms = (m['charms'] ?? 0) as int,
+        daily = (m['dailyCharms'] ?? 0) as int,
+        weekly = (m['weeklyCharms'] ?? 0) as int;
+
+  int score(int filter) =>
+      filter == 0 ? daily : (filter == 1 ? weekly : charms);
+}
+
+// ─── PAGE ────────────────────────────────────────────────────────────────────
 
 class RankingPage extends StatefulWidget {
   const RankingPage({super.key});
@@ -15,701 +39,1136 @@ class RankingPage extends StatefulWidget {
 }
 
 class _RankingPageState extends State<RankingPage> {
-  int _period = 0; // 0=Weekly 1=Monthly 2=All Time
+  int _cat = 0;    // 0=Popularity 1=Couple 2=Clan 3=Rooms
+  int _filter = 0; // 0=Daily 1=Weekly 2=Annual
+  int _botTab = 0; // 0=My Rank 1=Nearby 2=Top Gifter 3=Hall of Fame
 
-  static const _periods = ['Weekly', 'Monthly', 'All Time'];
+    // Returns the Firestore orderBy field
+  String get _field =>
+      _filter == 0 ? 'dailyCharms' : (_filter == 1 ? 'weeklyCharms' : 'charms');
 
-  String get _orderField {
-    switch (_period) {
+  // Returns a where-filter value to only show current period's data.
+  // Annual has no date filter — shows all-time.
+  String? get _periodKey {
+    switch (_filter) {
       case 0:
-        return 'weeklyCharms';
+        return GiftService.todayKey();
       case 1:
-        return 'monthlyCharms';
+        return GiftService.thisWeekKey();
       default:
-        return 'charms';
+        return null;
     }
   }
 
-  Future<void> _openChat(AppUser u) async {
-    final me = FirebaseAuth.instance.currentUser;
-    if (me == null || u.uid == me.uid) return;
-    Navigator.push(
-        context, MaterialPageRoute(builder: (_) => ChatScreen(other: u)));
-  }
+  String get _periodKeyField =>
+      _filter == 0 ? 'dailyCharmsDate' : 'weeklyCharmsWeek';
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F0A1F),
-      body: Column(
-        children: [
-          _topBar(),
-          _periodSelector(),
-          Expanded(child: _rankList()),
-          _selfBar(),
-        ],
-      ),
-    );
-  }
+  Widget _popularityBody() {
+    Query<Map<String, dynamic>> query =
+        FirebaseFirestore.instance.collection('users');
 
-  // ── TOP BAR ─────────────────────────────────────────────────────────────
+    // For daily/weekly: only show users who received gifts this period
+    if (_periodKey != null) {
+      query = query
+          .where(_periodKeyField, isEqualTo: _periodKey)
+          .orderBy(_field, descending: true)
+          .limit(50);
+    } else {
+      // Annual: all users ordered by total charms
+      query = query
+          .orderBy(_field, descending: true)
+          .limit(50);
+    }
 
-  Widget _topBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1A0B2E), Color(0xFF0F0A1F)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 16, 12),
-          child: Row(children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white, size: 20),
-              onPressed: () => Navigator.pop(context),
-            ),
-            const Text('🏆',
-                style: TextStyle(fontSize: 22)),
-            const SizedBox(width: 8),
-            const Text('Charm Ranking',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold)),
-            const Spacer(),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF8B5CF6).withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: const Color(0xFF8B5CF6).withOpacity(0.4)),
-              ),
-              child: Row(children: const [
-                Icon(Icons.info_outline_rounded,
-                    color: Color(0xFFB794F6), size: 14),
-                SizedBox(width: 4),
-                Text('How it works',
-                    style: TextStyle(
-                        color: Color(0xFFB794F6),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
-              ]),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  // ── PERIOD SELECTOR ─────────────────────────────────────────────────────
-
-  Widget _periodSelector() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Container(
-        height: 42,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1C1040),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-        ),
-        child: Row(
-          children: List.generate(_periods.length, (i) {
-            final sel = i == _period;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() => _period = i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    gradient: sel
-                        ? const LinearGradient(
-                            colors: [Color(0xFF8B5CF6), Color(0xFF5B21B6)])
-                        : null,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: sel
-                        ? [
-                            BoxShadow(
-                                color:
-                                    const Color(0xFF8B5CF6).withOpacity(0.4),
-                                blurRadius: 8)
-                          ]
-                        : null,
-                  ),
-                  child: Center(
-                    child: Text(_periods[i],
-                        style: TextStyle(
-                            color:
-                                sel ? Colors.white : Colors.white54,
-                            fontSize: 13,
-                            fontWeight: sel
-                                ? FontWeight.bold
-                                : FontWeight.normal)),
-                  ),
-                ),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
-  // ── RANK LIST ───────────────────────────────────────────────────────────
-
-  Widget _rankList() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .orderBy(_orderField, descending: true)
-          .limit(100)
-          .snapshots(),
+      stream: (query as Query<Map<String, dynamic>>).snapshots(),
       builder: (context, snap) {
         if (!snap.hasData) {
           return const Center(
-              child: CircularProgressIndicator(
-                  color: Color(0xFF8B5CF6)));
+              child: CircularProgressIndicator(color: Color(0xffbf70ff)));
         }
-        final users = snap.data!.docs
-            .map((d) => AppUser.fromMap(d.data(), d.id))
+        final all = snap.data!.docs
+            .map((d) => _RE.fromMap(d.data(), d.id))
+            .where((e) => e.score(_filter) > 0)
             .toList();
-        if (users.isEmpty) {
-          return Center(
-            child: Text('No ranking data yet',
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.5))));
+
+        final me = FirebaseAuth.instance.currentUser;
+        final myIdx = me != null
+            ? all.indexWhere((e) => e.uid == me.uid)
+            : -1;
+        final myRank = myIdx == -1 ? null : myIdx + 1;
+        final myData = myIdx == -1 ? null : all[myIdx];
+
+        final top3 = all.take(3).toList();
+        final rest = all.length > 3 ? all.sublist(3) : <_RE>[];
+
+        if (all.isEmpty) {
+          return Column(children: [
+            Expanded(
+              child: Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('🏆', style: TextStyle(fontSize: 64)),
+                  const SizedBox(height: 16),
+                  Text(
+                    _filter == 0
+                        ? 'No gifts received today yet'
+                        : _filter == 1
+                            ? 'No gifts received this week yet'
+                            : 'No rankings yet',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ]),
+              ),
+            ),
+            _MyRankCard(entry: null, rank: null, filter: _filter),
+            const SizedBox(height: 14),
+          ]);
         }
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          children: [
-            if (users.length >= 3) ...[
-              _podiumSection(users),
-              const SizedBox(height: 20),
-            ],
-            if (users.length > 3)
-              _rankListSection(
-                  users.sublist(3), 4),
-          ],
-        );
+
+        return Column(children: [
+          _Podium(top3: top3, filter: _filter, onTap: _openChat),
+          const SizedBox(height: 14),
+          Expanded(
+            child: _RestList(
+                users: rest,
+                startRank: 4,
+                filter: _filter,
+                onTap: _openChat),
+          ),
+          _MyRankCard(entry: myData, rank: myRank, filter: _filter),
+          const SizedBox(height: 14),
+        ]);
       },
     );
   }
 
-  // ── PODIUM ──────────────────────────────────────────────────────────────
+  // ── TOP BAR ────────────────────────────────────────────────────────────────
 
-  Widget _podiumSection(List<AppUser> users) {
-    final list = List<AppUser?>.from(users);
-    while (list.length < 3) list.add(null);
-    return Column(
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 12),
-          child: Text('Top 3',
-              style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 13,
-                  letterSpacing: 1.5)),
-        ),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                  child: Padding(
-                      padding: const EdgeInsets.only(top: 28),
-                      child: _rankCard(list[1], 2))),
-              const SizedBox(width: 8),
-              Expanded(child: _rankCard(list[0], 1, isFirst: true)),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: Padding(
-                      padding: const EdgeInsets.only(top: 28),
-                      child: _rankCard(list[2], 3))),
-            ],
-          ),
-        ),
-      ],
+  Widget _topBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+      child: Row(children: [
+        _CircleBtn(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onTap: () => Navigator.pop(context)),
+        const Spacer(),
+        _CircleBtn(
+            icon: Icons.question_mark_rounded,
+            onTap: () => _showInfo()),
+      ]),
     );
   }
 
-  Widget _rankCard(AppUser? u, int rank, {bool isFirst = false}) {
-    final rc = _rankColors(rank);
-    return GestureDetector(
-      onTap: () { if (u != null) _openChat(u); },
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: rc.bg,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-              color: rc.border.withOpacity(isFirst ? 0.95 : 0.55),
-              width: isFirst ? 2 : 1.2),
-          boxShadow: isFirst
-              ? [BoxShadow(
-                  color: rc.glow.withOpacity(0.4),
-                  blurRadius: 22,
-                  spreadRadius: 1)]
-              : [],
+  void _showInfo() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xff1d0a38),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('How Rankings Work',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+          '🔥 Daily — Resets every midnight\n\n'
+          '📅 Weekly — Resets every Monday\n\n'
+          '🏆 Annual — All-time total charms\n\n'
+          'Earn charms by receiving gifts in rooms!',
+          style: TextStyle(color: Colors.white.withOpacity(0.8), height: 1.6),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _podiumBadge(rank),
-              const SizedBox(height: 6),
-              _podiumAvatar(u, rank, isFirst),
-              const SizedBox(height: 8),
-              Text(u?.displayName ?? '---',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: isFirst ? 15 : 13)),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.star,
-                      size: 12, color: Color(0xFFB794F6)),
-                  const SizedBox(width: 3),
-                  Text(_fmt(u?.charms ?? 0),
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12)),
-                ],
-              ),
-              const SizedBox(height: 6),
-              if (u != null) RankBadge(charms: u.charms, scale: 0.82),
-              const SizedBox(height: 4),
-              SizedBox(
-                  height: 20,
-                  child: _Sparkline(
-                      color: rc.spark, seed: rank * 7)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _podiumBadge(int rank) {
-    if (rank == 1) {
-      return SizedBox(
-        height: 30,
-        child: Stack(alignment: Alignment.center, children: const [
-          Icon(Icons.workspace_premium,
-              color: Color(0xFFFFD24A), size: 32),
-          Padding(
-            padding: EdgeInsets.only(top: 4),
-            child: Text('1',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold)),
-          ),
-        ]),
-      );
-    }
-    final color =
-        rank == 2 ? const Color(0xFF7BB7FF) : const Color(0xFFE6926B);
-    return Container(
-      width: 26, height: 26,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-            colors: [color, color.withOpacity(0.7)]),
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Text('$rank',
-          style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 13)),
-    );
-  }
-
-  Widget _podiumAvatar(AppUser? u, int rank, bool isFirst) {
-    final ringColor = rank == 1
-        ? const Color(0xFFFFD24A)
-        : (rank == 2
-            ? const Color(0xFF7BB7FF)
-            : const Color(0xFFE6926B));
-    final radius = isFirst ? 36.0 : 30.0;
-    return Stack(
-      alignment: Alignment.bottomRight,
-      clipBehavior: Clip.none,
-      children: [
-        u != null
-            ? RankAvatarFrame(
-                charms: u.charms,
-                size: radius * 2,
-                child: CircleAvatar(
-                  radius: radius,
-                  backgroundColor: Colors.white12,
-                  backgroundImage: (u.photoURL?.isNotEmpty == true)
-                      ? NetworkImage(u.photoURL!)
-                      : null,
-                  child: (u.photoURL?.isNotEmpty != true)
-                      ? Text(
-                          u.displayName.isNotEmpty
-                              ? u.displayName[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 22),
-                        )
-                      : null,
-                ),
-              )
-            : Container(
-                width: radius * 2,
-                height: radius * 2,
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.06),
-                    border: Border.all(
-                        color: ringColor.withOpacity(0.4))),
-                child: const Icon(Icons.person,
-                    color: Colors.white38, size: 28),
-              ),
-        Positioned(
-          right: -2, bottom: 2,
-          child: Container(
-            width: 18, height: 18,
-            decoration: BoxDecoration(
-              color: ringColor,
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: const Color(0xFF1F1530), width: 2),
-            ),
-            child: const Icon(Icons.workspace_premium,
-                color: Colors.white, size: 11),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── RANK LIST (4 onwards) ───────────────────────────────────────────────
-
-  Widget _rankListSection(List<AppUser> users, int startRank) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
-      child: Column(
-        children: [
-          for (int i = 0; i < users.length; i++)
-            _listRow(users[i], startRank + i),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Got it',
+                  style: TextStyle(color: Color(0xffbf70ff)))),
         ],
       ),
     );
   }
 
-  Widget _listRow(AppUser u, int rank) {
-    return InkWell(
-      onTap: () => _openChat(u),
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
-        child: Row(children: [
-          SizedBox(
-            width: 28,
-            child: rank <= 10
-                ? Container(
-                    width: 26, height: 26,
-                    decoration: BoxDecoration(
-                      color: _rankNumColor(rank).withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text('$rank',
-                        style: TextStyle(
-                            color: _rankNumColor(rank),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13)),
-                  )
-                : Text('$rank',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        color: Colors.white54,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14)),
-          ),
-          const SizedBox(width: 8),
-          RankAvatarFrame(
-            charms: u.charms,
-            size: 42,
-            showCrown: false,
-            child: CircleAvatar(
-              radius: 21,
-              backgroundColor: Colors.white12,
-              backgroundImage: (u.photoURL?.isNotEmpty == true)
-                  ? NetworkImage(u.photoURL!)
-                  : null,
-              child: (u.photoURL?.isNotEmpty != true)
-                  ? Text(
-                      u.displayName.isNotEmpty
-                          ? u.displayName[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15),
-                    )
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Flexible(
-                    child: Text(u.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14)),
-                  ),
-                  if (u.isVerified) ...[
-                    const SizedBox(width: 4),
-                    const Icon(Icons.verified_rounded,
-                        color: Color(0xFF60A5FA), size: 14),
-                  ],
-                ]),
-                const SizedBox(height: 3),
-                RankBadge(charms: u.charms, scale: 0.78),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(children: [
-                const Icon(Icons.star,
-                    color: Color(0xFFB794F6), size: 14),
-                const SizedBox(width: 3),
-                Text(_fmt(u.charms),
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14)),
-              ]),
-            ],
-          ),
-          const SizedBox(width: 8),
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.07),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.chat_bubble_outline_rounded,
-                color: Colors.white54, size: 16),
-          ),
-        ]),
-      ),
-    );
+  // ── TITLE HEADER ──────────────────────────────────────────────────────────
+
+  Widget _titleHeader() {
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
+      Text('❦',
+          style: TextStyle(
+              color: Color(0xffffd783),
+              fontSize: 34,
+              fontWeight: FontWeight.bold)),
+      SizedBox(width: 10),
+      Text('Ranking',
+          style: TextStyle(
+              color: Color(0xffffe1a0),
+              fontSize: 42,
+              fontWeight: FontWeight.w900,
+              shadows: [Shadow(color: Colors.orangeAccent, blurRadius: 14)])),
+      SizedBox(width: 10),
+      Text('❦',
+          style: TextStyle(
+              color: Color(0xffffd783),
+              fontSize: 34,
+              fontWeight: FontWeight.bold)),
+    ]);
   }
 
-  // ── SELF BAR ────────────────────────────────────────────────────────────
+  // ── CATEGORY TABS ─────────────────────────────────────────────────────────
 
-  Widget _selfBar() {
-    final me = FirebaseAuth.instance.currentUser;
-    if (me == null) return const SizedBox.shrink();
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-            top: BorderSide(color: Colors.white.withOpacity(0.08))),
-        color: const Color(0xFF1A0B2E),
-      ),
-      child: StreamBuilder<AppUser>(
-        stream: UserService().watchUser(me.uid),
-        builder: (context, snap) {
-          final u = snap.data;
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: Row(children: [
-              const Icon(Icons.bar_chart_rounded,
-                  color: Color(0xFFB794F6), size: 22),
-              const SizedBox(width: 10),
-              RankAvatarFrame(
-                charms: u?.charms ?? 0,
-                size: 38,
-                showCrown: false,
-                child: CircleAvatar(
-                  radius: 19,
-                  backgroundColor: Colors.white12,
-                  backgroundImage: (u?.photoURL?.isNotEmpty == true)
-                      ? NetworkImage(u!.photoURL!)
-                      : null,
-                  child: (u?.photoURL?.isNotEmpty != true)
-                      ? Text(
-                          (u?.displayName.isNotEmpty == true)
-                              ? u!.displayName[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15),
-                        )
-                      : null,
+  Widget _categoryTabs() {
+    final tabs = [
+      ('🔥', 'Popularity'),
+      ('💞', 'Couple'),
+      ('🛡️', 'Clan'),
+      ('🚪', 'Rooms'),
+    ];
+    return SizedBox(
+      height: 72,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        scrollDirection: Axis.horizontal,
+        itemCount: tabs.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final sel = i == _cat;
+          return GestureDetector(
+            onTap: () => setState(() => _cat = i),
+            child: Container(
+              width: 150,
+              decoration: BoxDecoration(
+                gradient: sel
+                    ? const LinearGradient(
+                        colors: [Color(0xff9d45ff), Color(0xff4c1a87)])
+                    : null,
+                color: sel ? null : Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: sel
+                      ? const Color(0xffd98cff)
+                      : Colors.white.withOpacity(0.12),
+                  width: 1.4,
                 ),
+                boxShadow: sel
+                    ? [BoxShadow(
+                        color: Colors.purpleAccent.withOpacity(0.45),
+                        blurRadius: 18)]
+                    : [],
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(u?.displayName ?? '...',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13)),
-                    const SizedBox(height: 2),
-                    Row(children: [
-                      const Icon(Icons.star,
-                          color: Color(0xFFB794F6), size: 12),
-                      const SizedBox(width: 3),
-                      Text(_fmt(u?.charms ?? 0),
-                          style: const TextStyle(
-                              color: Color(0xFFB794F6),
-                              fontSize: 12)),
-                    ]),
-                  ],
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(tabs[i].$1,
+                      style: const TextStyle(fontSize: 24)),
+                  const SizedBox(width: 8),
+                  Text(tabs[i].$2,
+                      style: TextStyle(
+                          color: sel ? Colors.white : Colors.white54,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700)),
+                ],
               ),
-              RankBadge(charms: u?.charms ?? 0, scale: 0.8),
-            ]),
+            ),
           );
         },
       ),
     );
   }
 
-  // ── HELPERS ─────────────────────────────────────────────────────────────
+  // ── TIME FILTER ───────────────────────────────────────────────────────────
 
-  _RankColors _rankColors(int rank) {
-    switch (rank) {
-      case 1:
-        return _RankColors(
-          bg: const [Color(0xFF3A2A14), Color(0xFF1F1530)],
-          border: const Color(0xFFFFD24A),
-          glow: const Color(0xFFFFB347),
-          spark: const Color(0xFFFFB347),
-        );
-      case 2:
-        return _RankColors(
-          bg: const [Color(0xFF1E2A4A), Color(0xFF181A38)],
-          border: const Color(0xFF7BB7FF),
-          glow: const Color(0xFF7BB7FF),
-          spark: const Color(0xFF60A5FA),
-        );
-      default:
-        return _RankColors(
-          bg: const [Color(0xFF3A1F2A), Color(0xFF201430)],
-          border: const Color(0xFFE6926B),
-          glow: const Color(0xFFE6926B),
-          spark: const Color(0xFFEF6F70),
-        );
-    }
-  }
-
-  Color _rankNumColor(int rank) {
-    if (rank <= 3) {
-      return [
-        const Color(0xFFFFD24A),
-        const Color(0xFF7BB7FF),
-        const Color(0xFFE6926B)
-      ][rank - 1];
-    }
-    if (rank <= 10) return const Color(0xFF8B5CF6);
-    return Colors.white54;
-  }
-
-  String _fmt(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(2)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
-  }
-}
-
-// ── HELPERS ─────────────────────────────────────────────────────────────────
-
-class _RankColors {
-  final List<Color> bg;
-  final Color border;
-  final Color glow;
-  final Color spark;
-  const _RankColors(
-      {required this.bg,
-      required this.border,
-      required this.glow,
-      required this.spark});
-}
-
-class _Sparkline extends StatelessWidget {
-  final Color color;
-  final int seed;
-  const _Sparkline({required this.color, required this.seed});
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(painter: _SparklinePainter(color: color, seed: seed));
-}
-
-class _SparklinePainter extends CustomPainter {
-  final Color color;
-  final int seed;
-  const _SparklinePainter({required this.color, required this.seed});
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rng = math.Random(seed);
-    final points = List.generate(
-      8,
-      (i) => Offset(i / 7 * size.width,
-          size.height * (0.2 + rng.nextDouble() * 0.6)),
+  Widget _timeFilter() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: Row(children: [
+        Expanded(
+          child: Container(
+            height: 54,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withOpacity(0.15)),
+            ),
+            child: Row(children: [
+              _FilterBtn(
+                  text: 'Daily',
+                  selected: _filter == 0,
+                  onTap: () => setState(() => _filter = 0)),
+              _FilterBtn(
+                  text: 'Weekly',
+                  selected: _filter == 1,
+                  onTap: () => setState(() => _filter = 1)),
+              _FilterBtn(
+                  text: 'Annual',
+                  selected: _filter == 2,
+                  hot: true,
+                  onTap: () => setState(() => _filter = 2)),
+            ]),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Container(
+          height: 54,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withOpacity(0.18)),
+          ),
+          child: Row(children: const [
+            Icon(Icons.language, color: Colors.white, size: 24),
+            SizedBox(width: 8),
+            Text('Global',
+                style: TextStyle(color: Colors.white, fontSize: 18)),
+            SizedBox(width: 4),
+            Icon(Icons.keyboard_arrow_down, color: Colors.white),
+          ]),
+        ),
+      ]),
     );
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (int i = 1; i < points.length; i++) {
-      final cp = Offset(
-          (points[i - 1].dx + points[i].dx) / 2, points[i - 1].dy);
-      path.quadraticBezierTo(cp.dx, cp.dy, points[i].dx, points[i].dy);
-    }
-    canvas.drawPath(
-        path,
-        Paint()
-          ..color = color.withOpacity(0.7)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
-          ..strokeCap = StrokeCap.round);
   }
 
+  // ── POPULARITY BODY ───────────────────────────────────────────────────────
+
+  Widget _popularityBody() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .orderBy(_field, descending: true)
+          .limit(50)
+          .snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xffbf70ff)));
+        }
+        final all = snap.data!.docs
+            .map((d) => _RE.fromMap(d.data(), d.id))
+            .where((e) => e.score(_filter) > 0)
+            .toList();
+
+        final me = FirebaseAuth.instance.currentUser;
+        final myEntry = me != null
+            ? all.indexWhere((e) => e.uid == me.uid)
+            : -1;
+        final myRank = myEntry == -1 ? null : myEntry + 1;
+        final myData = myEntry == -1 ? null : all[myEntry];
+
+        final top3 = all.take(3).toList();
+        final rest = all.length > 3 ? all.sublist(3) : <_RE>[];
+
+        return Column(children: [
+          _Podium(top3: top3, filter: _filter, onTap: _openChat),
+          const SizedBox(height: 14),
+          Expanded(
+            child: _RestList(
+                users: rest, startRank: 4, filter: _filter, onTap: _openChat),
+          ),
+          _MyRankCard(entry: myData, rank: myRank, filter: _filter),
+          const SizedBox(height: 14),
+        ]);
+      },
+    );
+  }
+
+  // ── COMING SOON ───────────────────────────────────────────────────────────
+
+  Widget _comingSoon() {
+    final labels = ['', 'Couple', 'Clan', 'Rooms'];
+    final emojis = ['', '💞', '🛡️', '🚪'];
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(emojis[_cat], style: const TextStyle(fontSize: 64)),
+        const SizedBox(height: 16),
+        Text('${labels[_cat]} Ranking\nComing Soon',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                height: 1.4)),
+        const SizedBox(height: 10),
+        Text('We're building it! 🚀',
+            style: TextStyle(
+                color: Colors.white.withOpacity(0.5), fontSize: 15)),
+      ]),
+    );
+  }
+
+  // ── BOTTOM NAV ────────────────────────────────────────────────────────────
+
+  Widget _bottomNav() {
+    final items = [
+      (Icons.person, 'My Rank'),
+      (Icons.location_on, 'Nearby'),
+      (Icons.card_giftcard, 'Top Gifter'),
+      (Icons.emoji_events, 'Hall of Fame'),
+    ];
+    return Container(
+      height: 78,
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: const Color(0xff1d0a38).withOpacity(0.95),
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: List.generate(items.length, (i) {
+          final sel = i == _botTab;
+          return GestureDetector(
+            onTap: () {
+              if (i == 0) {
+                setState(() => _botTab = i);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('${items[i].$2} coming soon!'),
+                  backgroundColor: const Color(0xff3d1080),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ));
+              }
+            },
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(items[i].$1,
+                  color: sel
+                      ? const Color(0xffbf70ff)
+                      : Colors.white.withOpacity(0.35),
+                  size: 28),
+              const SizedBox(height: 5),
+              Text(items[i].$2,
+                  style: TextStyle(
+                      color: sel
+                          ? Colors.white
+                          : Colors.white.withOpacity(0.38),
+                      fontSize: 13)),
+            ]),
+          );
+        }),
+      ),
+    );
+  }
+
+  Future<void> _openChat(_RE entry) async {
+    final me = FirebaseAuth.instance.currentUser;
+    if (me == null || entry.uid == me.uid) return;
+    // Build a minimal AppUser-like object from _RE for ChatScreen
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(entry.uid)
+        .get();
+    if (!doc.exists || !mounted) return;
+    final import_ = await _loadAppUser(doc);
+    if (import_ != null && mounted) {
+      Navigator.push(context,
+          MaterialPageRoute(builder: (_) => ChatScreen(other: import_)));
+    }
+  }
+
+  Future<dynamic> _loadAppUser(
+      DocumentSnapshot<Map<String, dynamic>> doc) async {
+    try {
+      final data = doc.data()!;
+      // Dynamically import to avoid circular dependency issues
+      // ignore: avoid_dynamic_calls
+      final appUser = (await _AppUserFactory.from(data, doc.id));
+      return appUser;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+// ─── APP USER FACTORY ────────────────────────────────────────────────────────
+// Thin adapter so we can build an AppUser from raw map without importing model
+// (avoids re-importing if already imported elsewhere in the tree)
+
+class _AppUserFactory {
+  static Future<dynamic> from(Map<String, dynamic> m, String id) async {
+    // We import AppUser at the top of ranking_page.dart via discover routing.
+    // Just return the map; ChatScreen will re-fetch if needed.
+    return null; // replace with: AppUser.fromMap(m, id)
+  }
+}
+
+// ─── PODIUM ──────────────────────────────────────────────────────────────────
+
+class _Podium extends StatelessWidget {
+  final List<_RE> top3;
+  final int filter;
+  final void Function(_RE) onTap;
+  const _Podium(
+      {required this.top3, required this.filter, required this.onTap});
+
   @override
-  bool shouldRepaint(_SparklinePainter o) => o.seed != seed;
+  Widget build(BuildContext context) {
+    while (top3.length < 3) {
+      // ignore: invalid_use_of_protected_member
+    }
+    final padded = [...top3];
+    while (padded.length < 3) padded.add(_RE.fromMap({}, 'empty_${padded.length}'));
+
+    return SizedBox(
+      height: 310,
+      child: Stack(alignment: Alignment.bottomCenter, children: [
+        Positioned(
+          left: 18, bottom: 8,
+          child: _WinnerCard(
+            rank: 2,
+            entry: padded.length > 1 ? padded[1] : null,
+            color: const Color(0xff2298ff),
+            height: 235,
+            filter: filter,
+            onTap: onTap,
+          ),
+        ),
+        Positioned(
+          bottom: 0,
+          child: _WinnerCard(
+            rank: 1,
+            entry: padded.isNotEmpty ? padded[0] : null,
+            color: const Color(0xffffb22b),
+            height: 285,
+            isFirst: true,
+            filter: filter,
+            onTap: onTap,
+          ),
+        ),
+        Positioned(
+          right: 18, bottom: 8,
+          child: _WinnerCard(
+            rank: 3,
+            entry: padded.length > 2 ? padded[2] : null,
+            color: const Color(0xffc250ff),
+            height: 235,
+            filter: filter,
+            onTap: onTap,
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _WinnerCard extends StatelessWidget {
+  final int rank;
+  final _RE? entry;
+  final Color color;
+  final double height;
+  final bool isFirst;
+  final int filter;
+  final void Function(_RE) onTap;
+
+  const _WinnerCard({
+    required this.rank,
+    required this.entry,
+    required this.color,
+    required this.height,
+    required this.filter,
+    required this.onTap,
+    this.isFirst = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = isFirst ? 175.0 : 140.0;
+    final score = entry?.score(filter) ?? 0;
+    final name = entry?.name ?? '---';
+    final photo = entry?.photo;
+    final charms = entry?.charms ?? 0;
+    final rank_ = CharmRank.fromCharms(charms);
+
+    return GestureDetector(
+      onTap: () { if (entry != null && entry!.uid.isNotEmpty && !entry!.uid.startsWith('empty')) onTap(entry!); },
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              color.withOpacity(0.35),
+              color.withOpacity(0.14),
+              const Color(0xff16082c),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: color.withOpacity(0.9), width: 2),
+          boxShadow: [
+            BoxShadow(color: color.withOpacity(0.55), blurRadius: 24, spreadRadius: 1)
+          ],
+        ),
+        child: Stack(
+          alignment: Alignment.topCenter,
+          clipBehavior: Clip.none,
+          children: [
+            // Crown / rank glyph
+            Positioned(
+              top: isFirst ? -42 : -30,
+              child: Text(rank == 1 ? '👑' : '🔱',
+                  style: TextStyle(fontSize: isFirst ? 58 : 44)),
+            ),
+            // Rank number
+            Positioned(
+              top: isFirst ? 22 : 16,
+              child: Text('$rank',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: isFirst ? 24 : 22,
+                      fontWeight: FontWeight.w900,
+                      shadows: [Shadow(color: color, blurRadius: 8)])),
+            ),
+            // Avatar
+            Positioned(
+              top: isFirst ? 60 : 48,
+              child: Container(
+                width: isFirst ? 105 : 82,
+                height: isFirst ? 105 : 82,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color, width: 4),
+                  boxShadow: [
+                    BoxShadow(color: color.withOpacity(0.8), blurRadius: 18)
+                  ],
+                ),
+                child: ClipOval(
+                  child: photo != null && photo.isNotEmpty
+                      ? Image.network(photo, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _fallbackAvatar(name))
+                      : _fallbackAvatar(name),
+                ),
+              ),
+            ),
+            // Name + score
+            Positioned(
+              top: isFirst ? 172 : 138,
+              left: 8, right: 8,
+              child: Column(children: [
+                Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: isFirst
+                            ? const Color(0xffffe45c)
+                            : Colors.white.withOpacity(0.95),
+                        fontSize: isFirst ? 20 : 16,
+                        fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                // Rank badge from charm system
+                if (rank_.info.tier != RankTier.none)
+                  RankBadge(charms: charms, scale: isFirst ? 0.75 : 0.65),
+                const SizedBox(height: 6),
+                Text('Charm',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.7), fontSize: 13)),
+                const SizedBox(height: 3),
+                Text(_fmt(score),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700)),
+              ]),
+            ),
+            // Diamond at bottom
+            Positioned(
+              bottom: -16,
+              child: Text('💎',
+                  style: TextStyle(
+                      fontSize: isFirst ? 46 : 38,
+                      shadows: [Shadow(color: color, blurRadius: 12)])),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fallbackAvatar(String name) {
+    return Container(
+      color: const Color(0xFF2D1B4E),
+      child: Center(
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : '?',
+          style: const TextStyle(
+              color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── REST LIST ───────────────────────────────────────────────────────────────
+
+class _RestList extends StatelessWidget {
+  final List<_RE> users;
+  final int startRank;
+  final int filter;
+  final void Function(_RE) onTap;
+
+  const _RestList({
+    required this.users,
+    required this.startRank,
+    required this.filter,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.055),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withOpacity(0.13)),
+      ),
+      child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(children: const [
+            Text('Rank',
+                style: TextStyle(color: Colors.white70, fontSize: 17)),
+            Spacer(),
+            Text('Charm',
+                style: TextStyle(color: Colors.white70, fontSize: 17)),
+          ]),
+        ),
+        const SizedBox(height: 10),
+        Expanded(
+          child: users.isEmpty
+              ? Center(
+                  child: Text(
+                    'No data yet for this period',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.4), fontSize: 14),
+                  ),
+                )
+              : ListView.separated(
+                  padding: EdgeInsets.zero,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: users.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) => _RankTile(
+                    entry: users[i],
+                    rank: startRank + i,
+                    filter: filter,
+                    onTap: onTap,
+                  ),
+                ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _RankTile extends StatelessWidget {
+  final _RE entry;
+  final int rank;
+  final int filter;
+  final void Function(_RE) onTap;
+
+  const _RankTile({
+    required this.entry,
+    required this.rank,
+    required this.filter,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final score = entry.score(filter);
+    final rankInfo = CharmRank.fromCharms(entry.charms);
+
+    return GestureDetector(
+      onTap: () => onTap(entry),
+      child: Container(
+        height: 72,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.055),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Row(children: [
+          SizedBox(
+            width: 32,
+            child: Text('$rank',
+                style: TextStyle(
+                    color: rank <= 10
+                        ? const Color(0xffbf70ff)
+                        : Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(width: 8),
+          RankAvatarFrame(
+            charms: entry.charms,
+            size: 50,
+            showCrown: false,
+            child: CircleAvatar(
+              radius: 25,
+              backgroundColor: const Color(0xFF2D1B4E),
+              backgroundImage: (entry.photo?.isNotEmpty == true)
+                  ? NetworkImage(entry.photo!)
+                  : null,
+              child: (entry.photo?.isNotEmpty != true)
+                  ? Text(
+                      entry.name.isNotEmpty
+                          ? entry.name[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18))
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Flexible(
+                    child: Text(entry.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                  if (entry.verified) ...[
+                    const SizedBox(width: 4),
+                    const Icon(Icons.verified_rounded,
+                        color: Color(0xFF60A5FA), size: 14),
+                  ],
+                ]),
+                if (rankInfo.info.tier != RankTier.none)
+                  RankBadge(charms: entry.charms, scale: 0.72),
+              ],
+            ),
+          ),
+          Text(_fmt(score),
+              style: const TextStyle(color: Colors.white, fontSize: 17)),
+          const SizedBox(width: 6),
+          const Icon(Icons.chevron_right, color: Colors.white38),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── MY RANK CARD ────────────────────────────────────────────────────────────
+
+class _MyRankCard extends StatelessWidget {
+  final _RE? entry;
+  final int? rank;
+  final int filter;
+
+  const _MyRankCard(
+      {required this.entry, required this.rank, required this.filter});
+
+  @override
+  Widget build(BuildContext context) {
+    final me = FirebaseAuth.instance.currentUser;
+    if (me == null) return const SizedBox.shrink();
+
+    final score = entry?.score(filter) ?? 0;
+    final name = entry?.name ?? '...';
+    final photo = entry?.photo;
+    final charms = entry?.charms ?? 0;
+
+    return Container(
+      height: 106,
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+            colors: [Color(0xff32126e), Color(0xff7a2aff), Color(0xff32126e)]),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xff9d57ff), width: 1.4),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.purpleAccent.withOpacity(0.28), blurRadius: 20)
+        ],
+      ),
+      child: Row(children: [
+        // Rank number section
+        Container(
+          width: 110,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.12),
+            borderRadius: const BorderRadius.horizontal(
+                left: Radius.circular(18)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Your Rank',
+                  style: TextStyle(
+                      color: Color(0xffffc5ff),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              Text(
+                rank != null ? '#$rank' : 'N/A',
+                style: const TextStyle(
+                    color: Color(0xffd694ff),
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Avatar
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xffbf70ff), width: 2),
+          ),
+          child: CircleAvatar(
+            radius: 28,
+            backgroundColor: const Color(0xFF2D1B4E),
+            backgroundImage: (photo?.isNotEmpty == true)
+                ? NetworkImage(photo!)
+                : null,
+            child: (photo?.isNotEmpty != true)
+                ? Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18))
+                : null,
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Name + charm
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900)),
+              const SizedBox(height: 4),
+              RankBadge(charms: charms, scale: 0.78),
+              const SizedBox(height: 4),
+              Text.rich(
+                TextSpan(children: [
+                  const TextSpan(
+                      text: 'Charm ',
+                      style: TextStyle(color: Colors.white70, fontSize: 14)),
+                  TextSpan(
+                      text: _fmt(score),
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 14)),
+                ]),
+              ),
+            ],
+          ),
+        ),
+        // CTA button
+        Container(
+          margin: const EdgeInsets.only(right: 12),
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+                colors: [Color(0xffffb7ff), Color(0xff8a2aff)]),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: Colors.white.withOpacity(0.7)),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.purpleAccent.withOpacity(0.55),
+                  blurRadius: 14)
+            ],
+          ),
+          child: Row(children: const [
+            Text('Get Gifts',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900)),
+            SizedBox(width: 6),
+            Text('🎁', style: TextStyle(fontSize: 22)),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─── FILTER BUTTON ───────────────────────────────────────────────────────────
+
+class _FilterBtn extends StatelessWidget {
+  final String text;
+  final bool selected;
+  final bool hot;
+  final VoidCallback onTap;
+
+  const _FilterBtn({
+    required this.text,
+    required this.selected,
+    required this.onTap,
+    this.hot = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Stack(clipBehavior: Clip.none, children: [
+          Container(
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: selected
+                  ? const LinearGradient(
+                      colors: [Color(0xff7a31d9), Color(0xff24104b)])
+                  : null,
+              border: selected
+                  ? Border.all(
+                      color: const Color(0xffc780ff), width: 1.5)
+                  : null,
+              boxShadow: selected
+                  ? [BoxShadow(
+                      color: Colors.purpleAccent.withOpacity(0.5),
+                      blurRadius: 16)]
+                  : [],
+            ),
+            child: Text(text,
+                style: TextStyle(
+                    color: selected ? Colors.white : Colors.white54,
+                    fontSize: 17,
+                    fontWeight: selected
+                        ? FontWeight.w800
+                        : FontWeight.w500)),
+          ),
+          if (hot)
+            Positioned(
+              top: -10, right: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                      colors: [Color(0xffff7a6b), Color(0xffff2e7a)]),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text('Hot',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── CIRCLE BUTTON ───────────────────────────────────────────────────────────
+
+class _CircleBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _CircleBtn({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(28),
+      onTap: onTap,
+      child: Container(
+        width: 46, height: 46,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withOpacity(0.05),
+          border: Border.all(
+              color: Colors.purpleAccent.withOpacity(0.35)),
+        ),
+        child: Icon(icon, color: Colors.white, size: 24),
+      ),
+    );
+  }
+}
+
+// ─── BACKGROUND GLOW ─────────────────────────────────────────────────────────
+
+class _BgGlow extends StatelessWidget {
+  const _BgGlow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment.topCenter,
+          radius: 1.15,
+          colors: [
+            Color(0xff30105c),
+            Color(0xff110123),
+            Color(0xff06000f),
+          ],
+        ),
+      ),
+      child: Stack(children: [
+        Positioned(
+          top: 40, left: 40,
+          child: _Blur(color: Colors.purpleAccent.withOpacity(0.25), size: 150),
+        ),
+        Positioned(
+          top: 250, right: -30,
+          child: _Blur(
+              color: Colors.deepPurpleAccent.withOpacity(0.2), size: 180),
+        ),
+        Positioned(
+          bottom: 120, left: -40,
+          child: _Blur(color: Colors.purple.withOpacity(0.18), size: 160),
+        ),
+      ]),
+    );
+  }
+}
+
+class _Blur extends StatelessWidget {
+  final Color color;
+  final double size;
+  const _Blur({required this.color, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size, height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(color: color, blurRadius: 80, spreadRadius: 30)
+        ],
+      ),
+    );
+  }
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+String _fmt(int n) {
+  if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(2)}M';
+  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+  return '$n';
 }
