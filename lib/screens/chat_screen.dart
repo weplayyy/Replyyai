@@ -9,6 +9,7 @@ import '../services/user_service.dart';
 import 'gift_picker.dart';
 import 'gift_animation_overlay.dart';
 import 'user_profile_sheet.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatScreen extends StatefulWidget {
   final AppUser other;
