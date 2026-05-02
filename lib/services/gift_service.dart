@@ -17,6 +17,24 @@ class GiftService {
   final _db = FirebaseFirestore.instance;
   final _rng = Random();
 
+  // ── Date helpers ────────────────────────────────────────────────────────
+  static String todayKey() {
+    final n = DateTime.now();
+    return '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
+  }
+
+  static String thisWeekKey() {
+    final n = DateTime.now();
+    final w = _weekNumber(n).toString().padLeft(2, '0');
+    return '${n.year}-W$w';
+  }
+
+  static int _weekNumber(DateTime d) {
+    final doy = d.difference(DateTime(d.year, 1, 1)).inDays + 1;
+    return ((doy - d.weekday + 10) / 7).floor();
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
   String _chatId(String a, String b) {
     final ids = [a, b]..sort();
     return '${ids[0]}_${ids[1]}';
@@ -32,6 +50,7 @@ class GiftService {
     return (luckyCoins: _rng.nextInt(price + 1), jackpot: false);
   }
 
+  // ── Guardian upsert ─────────────────────────────────────────────────────
   Future<void> _upsertGuardian({
     required String fromUid,
     required String toUid,
@@ -52,8 +71,8 @@ class GiftService {
       'lastGiftAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
-    // Called after every gift. If sender and receiver are CP partners,
-  // the charm value is added to their couple's cpGrowthCharms field.
+
+  // ── CP growth ────────────────────────────────────────────────────────────
   Future<void> _updateCpGrowth({
     required String fromUid,
     required String toUid,
@@ -62,30 +81,58 @@ class GiftService {
     try {
       final senderSnap = await _db.collection('users').doc(fromUid).get();
       final senderData = senderSnap.data() ?? {};
-      final coupleId   = senderData['cpCoupleId'] as String?;
+      final coupleId = senderData['cpCoupleId'] as String?;
       if (coupleId == null || coupleId.isEmpty) return;
 
-      final coupleRef  = _db.collection('couples').doc(coupleId);
+      final coupleRef = _db.collection('couples').doc(coupleId);
       final coupleSnap = await coupleRef.get();
       final coupleData = coupleSnap.data() ?? {};
 
-      // Verify receiver is the other partner in this couple
       final uid1 = coupleData['uid1'] as String?;
       final uid2 = coupleData['uid2'] as String?;
       final isPartner = (uid1 == fromUid && uid2 == toUid) ||
-                        (uid2 == fromUid && uid1 == toUid);
+          (uid2 == fromUid && uid1 == toUid);
       if (!isPartner) return;
 
-      // Accumulate growth on the couple doc
       await coupleRef.update({
         'cpGrowthCharms': FieldValue.increment(charms),
-        'lastGrowthAt':   FieldValue.serverTimestamp(),
+        'lastGrowthAt': FieldValue.serverTimestamp(),
       });
     } catch (_) {
-      // Non-critical — never block a gift because of CP growth failure
+      // Non-critical
     }
   }
 
+  // ── Lazy reset helper ────────────────────────────────────────────────────
+  // Returns the field updates for daily + weekly charms with auto-reset.
+  // If it's a new day/week for this user, resets to `charms` instead of
+  // incrementing. No Cloud Function required.
+  Map<String, dynamic> _periodUpdates({
+    required Map<String, dynamic> existingData,
+    required int charms,
+  }) {
+    final today = todayKey();
+    final week = thisWeekKey();
+
+    final storedDay = existingData['dailyCharmsDate'] as String?;
+    final storedWeek = existingData['weeklyCharmsWeek'] as String?;
+
+    return {
+      // Daily — reset if new day
+      'dailyCharms': storedDay == today
+          ? FieldValue.increment(charms)
+          : charms,
+      'dailyCharmsDate': today,
+
+      // Weekly — reset if new week
+      'weeklyCharms': storedWeek == week
+          ? FieldValue.increment(charms)
+          : charms,
+      'weeklyCharmsWeek': week,
+    };
+  }
+
+  // ── Send gift (chat) ─────────────────────────────────────────────────────
   Future<GiftSendResult> sendGift({
     required String fromUid,
     required String toUid,
@@ -102,25 +149,22 @@ class GiftService {
       final receiverSnap = await tx.get(receiverRef);
 
       final senderCoins = (senderSnap.data()?['coins'] ?? 0) as int;
-      if (senderCoins < gift.price) {
-        throw Exception('Not enough coins');
-      }
-      final receiverCoins = (receiverSnap.data()?['coins'] ?? 0) as int;
-      final receiverCharms = (receiverSnap.data()?['charms'] ?? 0) as int;
-      final newReceiverCharms = receiverCharms + charms;
+      if (senderCoins < gift.price) throw Exception('Not enough coins');
+
+      final receiverData = receiverSnap.data() ?? {};
+      final receiverCharms = (receiverData['charms'] ?? 0) as int;
 
       tx.update(senderRef, {'coins': senderCoins - gift.price});
 
-           tx.update(receiverRef, {
-        'charms': newReceiverCharms,
-        'dailyCharms': FieldValue.increment(charms),
-        'weeklyCharms': FieldValue.increment(charms),
+      tx.update(receiverRef, {
+        'charms': receiverCharms + charms,
+        ..._periodUpdates(existingData: receiverData, charms: charms),
       });
     });
 
     await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
-        await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
     await _updateCpGrowth(fromUid: fromUid, toUid: toUid, charms: charms);
+
     final chatRef = _db.collection('chats').doc(_chatId(fromUid, toUid));
     await chatRef.set({
       'participants': [fromUid, toUid],
@@ -151,6 +195,7 @@ class GiftService {
     );
   }
 
+  // ── Send gift (room) ─────────────────────────────────────────────────────
   Future<GiftSendResult> sendGiftInRoom({
     required String fromUid,
     required String toUid,
@@ -168,22 +213,23 @@ class GiftService {
       final receiverSnap = await tx.get(receiverRef);
 
       final senderCoins = (senderSnap.data()?['coins'] ?? 0) as int;
-      if (senderCoins < gift.price) {
-        throw Exception('Not enough coins');
-      }
-      final receiverCoins = (receiverSnap.data()?['coins'] ?? 0) as int;
-      final receiverCharms = (receiverSnap.data()?['charms'] ?? 0) as int;
-      final newReceiverCharms = receiverCharms + charms;
+      if (senderCoins < gift.price) throw Exception('Not enough coins');
+
+      final receiverData = receiverSnap.data() ?? {};
+      final receiverCharms = (receiverData['charms'] ?? 0) as int;
+      final receiverCoins = (receiverData['coins'] ?? 0) as int;
 
       tx.update(senderRef, {'coins': senderCoins - gift.price});
 
       tx.update(receiverRef, {
         'coins': receiverCoins + roll.luckyCoins,
-        'charms': newReceiverCharms,
+        'charms': receiverCharms + charms,
+        ..._periodUpdates(existingData: receiverData, charms: charms),
       });
     });
 
     await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
+    await _updateCpGrowth(fromUid: fromUid, toUid: toUid, charms: charms);
 
     await _db
         .collection('rooms')
