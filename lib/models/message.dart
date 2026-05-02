@@ -9,7 +9,9 @@ class Message {
   final String? giftName;
   final String? giftIcon;
   final int? giftPrice;
+  final int? charms;
   final int? luckyCoins;
+  final bool jackpot;
   final Timestamp? createdAt;
 
   Message({
@@ -21,7 +23,9 @@ class Message {
     this.giftName,
     this.giftIcon,
     this.giftPrice,
+    this.charms,
     this.luckyCoins,
+    this.jackpot = false,
     this.createdAt,
   });
 
@@ -36,7 +40,9 @@ class Message {
       giftName: m['giftName'],
       giftIcon: m['giftIcon'],
       giftPrice: m['giftPrice'],
+      charms: m['charms'],
       luckyCoins: m['luckyCoins'],
+      jackpot: m['jackpot'] ?? false,
       createdAt: m['createdAt'],
     );
   }
