@@ -387,7 +387,7 @@ class _RankingPageState extends State<RankingPage> {
                 fontWeight: FontWeight.bold,
                 height: 1.4)),
         const SizedBox(height: 10),
-        Text('We're building it! 🚀',
+        Text("We're building it! 🚀",
             style: TextStyle(
                 color: Colors.white.withOpacity(0.5), fontSize: 15)),
       ]),
