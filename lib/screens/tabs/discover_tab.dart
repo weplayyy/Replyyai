@@ -916,4 +916,121 @@ class _EventPreviewCardState extends State<_EventPreviewCard> {
     _seconds = _parse(widget.timer);
     _t = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() =>
+            setState(() => _seconds = (_seconds - 1).clamp(0, 1 << 30));
+    });
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  int _parse(String s) {
+    try {
+      final parts = s.split(' ');
+      final days = int.parse(parts[0].replaceAll('D', ''));
+      final tp = parts[1].split(':');
+      return days * 86400 +
+          int.parse(tp[0]) * 3600 +
+          int.parse(tp[1]) * 60 +
+          int.parse(tp[2]);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  String get _display {
+    final d = _seconds ~/ 86400;
+    final h = (_seconds % 86400) ~/ 3600;
+    final m = (_seconds % 3600) ~/ 60;
+    final s = _seconds % 60;
+    return '${d}D ${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 150,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: widget.bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: widget.borderColor.withOpacity(0.65), width: 1),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(widget.emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(widget.title,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    height: 1.2)),
+          ),
+        ]),
+        const SizedBox(height: 4),
+        Text(widget.desc,
+            style: TextStyle(
+                color: Colors.white.withOpacity(0.6),
+                fontSize: 10,
+                height: 1.4)),
+        const Spacer(),
+        Row(children: [
+          const Icon(Icons.access_time_rounded,
+              size: 11, color: Color(0xFFFBBF24)),
+          const SizedBox(width: 4),
+          Text(_display,
+              style: const TextStyle(
+                  color: Color(0xFFFBBF24),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold)),
+        ]),
+      ]),
+    );
+  }
+}
+
+// ── SPARKLINE ────────────────────────────────────────────────────────────────
+
+class _Sparkline extends StatelessWidget {
+  final Color color;
+  final int seed;
+  const _Sparkline({required this.color, required this.seed});
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(painter: _SparklinePainter(color: color, seed: seed));
+}
+
+class _SparklinePainter extends CustomPainter {
+  final Color color;
+  final int seed;
+  const _SparklinePainter({required this.color, required this.seed});
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rng = math.Random(seed);
+    final pts = List.generate(
+        8,
+        (i) => Offset(i / 7 * size.width,
+            size.height * (0.2 + rng.nextDouble() * 0.6)));
+    final path = Path()..moveTo(pts.first.dx, pts.first.dy);
+    for (int i = 1; i < pts.length; i++) {
+      final cp =
+          Offset((pts[i - 1].dx + pts[i].dx) / 2, pts[i - 1].dy);
+      path.quadraticBezierTo(cp.dx, cp.dy, pts[i].dx, pts[i].dy);
+    }
+    canvas.drawPath(
+        path,
+        Paint()
+          ..color = color.withOpacity(0.7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..strokeCap = StrokeCap.round);
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter o) => o.seed != seed;
+}
