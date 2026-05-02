@@ -6,15 +6,10 @@ class Gift {
   final String icon;
   final int price;
   final List<Color> gradient;
-
-  /// Optional PNG with transparent bg. e.g. 'assets/gifts/rose.png'
   final String? imageAsset;
-
-  /// Optional fullscreen mp4. e.g. 'assets/gifts/royal_palace.mp4'
   final String? videoAsset;
-
-  /// Optional corner badge: 'Popular', 'New', 'Hot', etc.
   final String? badge;
+  final String description;         // ← ADD THIS
 
   const Gift({
     required this.id,
@@ -25,52 +20,61 @@ class Gift {
     this.imageAsset,
     this.videoAsset,
     this.badge,
+    this.description = 'A special gift just for you 💜',   // ← ADD THIS
   });
 }
 
 const List<Gift> kAllGifts = [
-  // Add your real gifts here. Examples below — replace freely.
   Gift(
     id: 'galaxy_heart', name: 'Galaxy Heart', icon: '💜', price: 9999,
     gradient: [Color(0xFFEC4899), Color(0xFF8B5CF6)],
     badge: 'Popular',
+    description: 'A heart from another galaxy, just for you 🌌',
   ),
   Gift(
     id: 'starship', name: 'Starship', icon: '🚀', price: 8888,
     gradient: [Color(0xFF06B6D4), Color(0xFF8B5CF6)],
     badge: 'New',
+    description: 'To infinity and beyond, with you 🚀',
   ),
   Gift(
     id: 'crystal_castle', name: 'Crystal Castle', icon: '🏰', price: 6666,
     gradient: [Color(0xFF22D3EE), Color(0xFF60A5FA)],
+    description: 'A crystal castle built just for you 💎',
   ),
   Gift(
     id: 'dream_villa', name: 'Dream Villa', icon: '🏡', price: 5555,
     gradient: [Color(0xFFF472B6), Color(0xFF8B5CF6)],
+    description: 'Your dream home, wherever you are 🏡',
   ),
   Gift(
     id: 'forever_rose', name: 'Forever Rose', icon: '🌹', price: 2999,
     gradient: [Color(0xFFEC4899), Color(0xFFF472B6)],
+    description: 'A rose that never wilts, like my feelings 🌹',
   ),
   Gift(
     id: 'love_wings', name: 'Love Wings', icon: '💖', price: 1999,
     gradient: [Color(0xFFEF4444), Color(0xFF8B5CF6)],
+    description: 'Wings to fly you straight to my heart 💖',
   ),
   Gift(
     id: 'fireworks', name: 'Fireworks Show', icon: '🎆', price: 1299,
     gradient: [Color(0xFFFBBF24), Color(0xFFEC4899)],
+    description: 'You light up the sky like fireworks 🎆',
   ),
   Gift(
     id: 'vidvan', name: 'Vidhvan', icon: '☄️', price: 177799,
     gradient: [Color(0xFFFBBF24), Color(0xFFF59E0B)],
     imageAsset: 'assets/gifts/vidvan.png',
     videoAsset: 'assets/gifts/vidvan.mp4',
+    description: 'The rarest gift for the rarest person ☄️',
   ),
   Gift(
     id: 'heaven_palace', name: 'Heaven Palace', icon: '🏰', price: 500000,
     gradient: [Color(0xFFF59E0B), Color(0xFFFBBF24)],
     imageAsset: 'assets/gifts/heaven_palace.png',
     videoAsset: 'assets/gifts/heaven_palace.mp4',
+    description: 'A palace in heaven, fit for royalty 👑',
   ),
 ];
 
