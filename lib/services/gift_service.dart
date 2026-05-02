@@ -111,9 +111,10 @@ class GiftService {
 
       tx.update(senderRef, {'coins': senderCoins - gift.price});
 
-      tx.update(receiverRef, {
-        'coins': receiverCoins + roll.luckyCoins,
+           tx.update(receiverRef, {
         'charms': newReceiverCharms,
+        'dailyCharms': FieldValue.increment(charms),
+        'weeklyCharms': FieldValue.increment(charms),
       });
     });
 
