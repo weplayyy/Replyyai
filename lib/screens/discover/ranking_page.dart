@@ -68,13 +68,13 @@ class _RankingPageState extends State<RankingPage> {
           const _BgGlow(),
           Column(children: [
             _topBar(),
-            const SizedBox(height: 14),
+            const SizedBox(height: 6),
             _titleHeader(),
-            const SizedBox(height: 22),
+            const SizedBox(height: 10),
             _categoryTabs(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
             _timeFilter(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
             Expanded(child: _cat == 0 ? _popularityBody() : _comingSoon()),
             _bottomNav(),
             const SizedBox(height: 10),
@@ -161,18 +161,18 @@ class _RankingPageState extends State<RankingPage> {
       ('🚪', 'Rooms'),
     ];
     return SizedBox(
-      height: 72,
+      height: 58,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 18),
         scrollDirection: Axis.horizontal,
         itemCount: tabs.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final sel = i == _cat;
           return GestureDetector(
             onTap: () => setState(() => _cat = i),
             child: Container(
-              width: 150,
+              width: 128,
               decoration: BoxDecoration(
                 gradient: sel
                     ? const LinearGradient(
@@ -195,12 +195,12 @@ class _RankingPageState extends State<RankingPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(tabs[i].$1, style: const TextStyle(fontSize: 24)),
-                  const SizedBox(width: 8),
+                  Text(tabs[i].$1, style: const TextStyle(fontSize: 20)),
+                  const SizedBox(width: 6),
                   Text(tabs[i].$2,
                       style: TextStyle(
                           color: sel ? Colors.white : Colors.white54,
-                          fontSize: 18,
+                          fontSize: 15,
                           fontWeight: FontWeight.w700)),
                 ],
               ),
@@ -219,7 +219,7 @@ class _RankingPageState extends State<RankingPage> {
       child: Row(children: [
         Expanded(
           child: Container(
-            height: 54,
+            height: 44,
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.04),
               borderRadius: BorderRadius.circular(28),
@@ -244,8 +244,8 @@ class _RankingPageState extends State<RankingPage> {
         ),
         const SizedBox(width: 14),
         Container(
-          height: 54,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.04),
             borderRadius: BorderRadius.circular(28),
@@ -989,7 +989,7 @@ class _FilterBtn extends StatelessWidget {
         onTap: onTap,
         child: Stack(clipBehavior: Clip.none, children: [
           Container(
-            height: 54,
+            height: 44,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(28),
@@ -1008,10 +1008,13 @@ class _FilterBtn extends StatelessWidget {
                     ]
                   : [],
             ),
-            child: Text(text,
+                child: Text(text,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
                 style: TextStyle(
                     color: selected ? Colors.white : Colors.white54,
-                    fontSize: 17,
+                    fontSize: 14,
                     fontWeight:
                         selected ? FontWeight.w800 : FontWeight.w500)),
           ),
