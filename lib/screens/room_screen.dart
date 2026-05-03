@@ -470,6 +470,7 @@ class _RoomScreenState extends State<RoomScreen>
     ),
   ),
 );
+  }
 
   Widget _header() {
     final photo =
