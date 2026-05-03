@@ -196,12 +196,13 @@ class GiftService {
   }
 
   // ── Send gift (room) ─────────────────────────────────────────────────────
-  Future<GiftSendResult> sendGiftInRoom({
+    Future<GiftSendResult> sendGiftInRoom({
     required String fromUid,
     required String toUid,
     required String roomId,
     required Gift gift,
   }) async {
+    final isSelf = fromUid == toUid;
     final senderRef = _db.collection('users').doc(fromUid);
     final receiverRef = _db.collection('users').doc(toUid);
 
@@ -210,26 +211,35 @@ class GiftService {
 
     await _db.runTransaction((tx) async {
       final senderSnap = await tx.get(senderRef);
-      final receiverSnap = await tx.get(receiverRef);
-
-      final senderCoins = (senderSnap.data()?['coins'] ?? 0) as int;
+      final senderData = senderSnap.data() ?? {};
+      final senderCoins = (senderData['coins'] ?? 0) as int;
       if (senderCoins < gift.price) throw Exception('Not enough coins');
 
-      final receiverData = receiverSnap.data() ?? {};
-      final receiverCharms = (receiverData['charms'] ?? 0) as int;
-      final receiverCoins = (receiverData['coins'] ?? 0) as int;
-
-      tx.update(senderRef, {'coins': senderCoins - gift.price});
-
-      tx.update(receiverRef, {
-        'coins': receiverCoins + roll.luckyCoins,
-        'charms': receiverCharms + charms,
-        ..._periodUpdates(existingData: receiverData, charms: charms),
-      });
+      if (isSelf) {
+        final selfCharms = (senderData['charms'] ?? 0) as int;
+        tx.update(senderRef, {
+          'coins': senderCoins - gift.price + roll.luckyCoins,
+          'charms': selfCharms + charms,
+          ..._periodUpdates(existingData: senderData, charms: charms),
+        });
+      } else {
+        final receiverSnap = await tx.get(receiverRef);
+        final receiverData = receiverSnap.data() ?? {};
+        final receiverCharms = (receiverData['charms'] ?? 0) as int;
+        final receiverCoins = (receiverData['coins'] ?? 0) as int;
+        tx.update(senderRef, {'coins': senderCoins - gift.price});
+        tx.update(receiverRef, {
+          'coins': receiverCoins + roll.luckyCoins,
+          'charms': receiverCharms + charms,
+          ..._periodUpdates(existingData: receiverData, charms: charms),
+        });
+      }
     });
 
-    await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
-    await _updateCpGrowth(fromUid: fromUid, toUid: toUid, charms: charms);
+    if (!isSelf) {
+      await _upsertGuardian(fromUid: fromUid, toUid: toUid, charms: charms);
+      await _updateCpGrowth(fromUid: fromUid, toUid: toUid, charms: charms);
+    }
 
     await _db
         .collection('rooms')
