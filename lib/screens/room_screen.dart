@@ -18,6 +18,7 @@ import 'gift_animation_overlay.dart';
 import 'shop_screen.dart';
 import 'user_profile_screen.dart';
 import '../features/rooms/widgets/manage_member_sheet.dart';
+import '../models/gift.dart
 
 class RoomScreen extends StatefulWidget {
   final Room room;
