@@ -419,33 +419,33 @@ class _RoomScreenState extends State<RoomScreen>
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: true,
-      onPopInvoked: (didPop) async {
-        if (didPop) await ActiveRoomService.instance.minimize();
-      },
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0F0A1F),
-        body: Container(
-          // Rich, expensive-looking gradient backdrop.
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFF1A0B33),
-                Color(0xFF0F0A1F),
-                Color(0xFF080414),
-              ],
-            ),
-          ),
-          child: SafeArea(
-          child: Stack(
-            children: [
-              Column(
-                children: [
+  canPop: true,
+  onPopInvoked: (didPop) async {
+    if (didPop) await ActiveRoomService.instance.minimize();
+  },
+  child: Scaffold(
+    backgroundColor: const Color(0xFF0F0A1F),
+    body: Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF1A0B33),
+            Color(0xFF0F0A1F),
+            Color(0xFF080414),
+          ],
+        ),
+      ),
+      child: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
                 _header(),
                 _pinnedBanner(),
                 _tabBar(),
+
                 Expanded(
                   child: TabBarView(
                     controller: _tab,
@@ -456,17 +456,20 @@ class _RoomScreenState extends State<RoomScreen>
                       _leaderboardTab(),
                     ],
                   ),
-                                _ownerLeftBanner(),
-              _inputBar(),
-            ],
-          ),
-          _comboOverlay(),
-        ],
-      ),
+                ),
+
+                _ownerLeftBanner(),
+                _inputBar(),
+              ],
+            ),
+
+            _comboOverlay(),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
 
   Widget _header() {
     final photo =
