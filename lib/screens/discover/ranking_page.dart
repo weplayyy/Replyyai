@@ -136,7 +136,7 @@ class _RankingPageState extends State<RankingPage> {
       backgroundColor: const Color(0xff080014),
       body: SafeArea(
         child: Stack(children: [
-          const _BgGlow(),
+          _BgGlow(),
           Column(children: [
             _topBar(),
             const SizedBox(height: 4),
