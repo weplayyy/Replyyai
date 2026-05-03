@@ -1341,7 +1341,7 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   // ================= BOTTOM TOOLBAR =================
-
+}
 
 class _CountdownBanner extends StatefulWidget {
   final DateTime deleteAt;
