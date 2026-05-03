@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/room.dart';
@@ -34,6 +35,14 @@ class _RoomScreenState extends State<RoomScreen>
   final _giftSvc = GiftService();
   final _scroll = ScrollController();
 
+    // ── Combo gift state ────────────────────────────────────────────────────
+  Gift? _comboGift;
+  String? _comboToUid;
+  String? _comboToName;
+  int _comboCount = 0;
+  int _comboSecsLeft = 5;
+  Timer? _comboTimer;
+
     @override
   void initState() {
     super.initState();
@@ -54,6 +63,7 @@ class _RoomScreenState extends State<RoomScreen>
     _tab.dispose();
     _msgC.dispose();
     _scroll.dispose();
+    _comboTimer?.cancel();
     ActiveRoomService.instance.setFullscreen(false);
     super.dispose();
   }
@@ -88,23 +98,16 @@ class _RoomScreenState extends State<RoomScreen>
 
   /// One single gift flow used everywhere. Pass a recipient or null
   /// to first prompt for a recipient via the picker.
-  Future<void> _giftFlow({String? toUid, String? toName}) async {
+    Future<void> _giftFlow({String? toUid, String? toName}) async {
     if (toUid == null) {
-      final picked =
-          await RecipientPickerSheet.show(context, widget.room.id);
+      final picked = await RecipientPickerSheet.show(context, widget.room.id);
       if (picked == null || !mounted) return;
       toUid = picked.uid;
       toName = picked.displayName;
     }
-    if (toUid == _meUid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You can\'t gift yourself 😅')));
-      return;
-    }
 
     final me = await _userSvc.getUser(_meUid);
     final balance = me?.coins ?? 0;
-
     if (!mounted) return;
 
     final gift = await showGiftPicker(context, balance);
@@ -123,9 +126,10 @@ class _RoomScreenState extends State<RoomScreen>
       }
 
       if (!mounted) return;
+      _startCombo(gift, toUid, toName ?? 'them');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(result.jackpot
-            ? '🎉 JACKPOT! +${result.luckyCoins} lucky coins back to ${toName ?? "them"}'
+            ? '🎉 JACKPOT! +${result.luckyCoins} lucky coins to ${toName ?? "them"}'
             : 'Sent ${gift.name} to ${toName ?? "them"}'),
       ));
     } catch (e) {
@@ -135,6 +139,135 @@ class _RoomScreenState extends State<RoomScreen>
           : 'Error: $e';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
+    }
+
+    void _startCombo(Gift gift, String toUid, String toName) {
+    _comboTimer?.cancel();
+    setState(() {
+      _comboGift = gift;
+      _comboToUid = toUid;
+      _comboToName = toName;
+      _comboCount = 1;
+      _comboSecsLeft = 5;
+    });
+    _comboTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() => _comboSecsLeft--);
+      if (_comboSecsLeft <= 0) {
+        t.cancel();
+        if (mounted) setState(() => _comboGift = null);
+      }
+    });
+  }
+
+  Future<void> _comboResend() async {
+    final gift = _comboGift;
+    final toUid = _comboToUid;
+    final toName = _comboToName;
+    if (gift == null || toUid == null) return;
+    _comboTimer?.cancel();
+    setState(() { _comboCount++; _comboSecsLeft = 5; });
+    _comboTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() => _comboSecsLeft--);
+      if (_comboSecsLeft <= 0) {
+        t.cancel();
+        if (mounted) setState(() => _comboGift = null);
+      }
+    });
+    try {
+      final result = await _giftSvc.sendGiftInRoom(
+        fromUid: _meUid, toUid: toUid,
+        roomId: widget.room.id, gift: gift,
+      );
+      if (!mounted) return;
+      if (result.jackpot) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('🎉 JACKPOT! +${result.luckyCoins} lucky coins!'),
+        ));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().contains('Not enough coins')
+          ? 'Not enough coins!'
+          : 'Error: $e';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      _comboTimer?.cancel();
+      setState(() => _comboGift = null);
+    }
+  }
+
+  Widget _comboOverlay() {
+    final gift = _comboGift;
+    if (gift == null) return const SizedBox.shrink();
+    return Positioned(
+      right: 16,
+      bottom: 80,
+      child: GestureDetector(
+        onTap: _comboResend,
+        child: SizedBox(
+          width: 76,
+          height: 76,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox.expand(
+                child: CircularProgressIndicator(
+                  value: _comboSecsLeft / 5.0,
+                  color: const Color(0xFFEC4899),
+                  backgroundColor: Colors.white12,
+                  strokeWidth: 3.5,
+                ),
+              ),
+              Container(
+                width: 62,
+                height: 62,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [Color(0xFF8B5CF6), Color(0xFF4C1D95)],
+                  ),
+                ),
+                child: Center(
+                  child: Text(gift.icon, style: const TextStyle(fontSize: 28)),
+                ),
+              ),
+              if (_comboCount > 1)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEC4899),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '×$_comboCount',
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              Positioned(
+                bottom: 2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${_comboSecsLeft}s',
+                    style: const TextStyle(color: Colors.white70, fontSize: 9),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _showMessageMenu(RoomMessage m) async {
@@ -306,8 +439,10 @@ class _RoomScreenState extends State<RoomScreen>
             ),
           ),
           child: SafeArea(
-            child: Column(
-              children: [
+          child: Stack(
+            children: [
+              Column(
+                children: [
                 _header(),
                 _pinnedBanner(),
                 _tabBar(),
@@ -321,13 +456,13 @@ class _RoomScreenState extends State<RoomScreen>
                       _leaderboardTab(),
                     ],
                   ),
-                ),
                                 _ownerLeftBanner(),
-                _inputBar(),
-                _bottomToolbar(),
-              ],
-            ),
+              _inputBar(),
+            ],
           ),
+          _comboOverlay(),
+        ],
+      ),
         ),
       ),
     );
@@ -1201,38 +1336,6 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   // ================= BOTTOM TOOLBAR =================
-
-  Widget _bottomToolbar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.5),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _tool(Icons.mic, "Mic"),
-          _tool(Icons.emoji_emotions, "Emoji"),
-          _tool(Icons.games, "Games"),
-          _tool(Icons.card_giftcard, "Gift"),
-        ],
-      ),
-    );
-  }
-
-  Widget _tool(IconData icon, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: Colors.white70, size: 22),
-        const SizedBox(height: 2),
-        Text(label,
-            style: const TextStyle(
-                color: Colors.white54, fontSize: 10)),
-      ],
-    );
-  }
-}
 
 
 class _CountdownBanner extends StatefulWidget {
