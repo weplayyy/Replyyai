@@ -246,30 +246,23 @@ class _RankingPageState extends State<RankingPage> {
 
   // ── Popularity body ────────────────────────────────────────────────────────
 
-  Widget _popularityBody() {
+    Widget _popularityBody() {
     Query<Map<String, dynamic>> q = FirebaseFirestore.instance.collection('users');
-if (_periodKey != null) {
-  // Only .where() — no .orderBy() — avoids needing a composite index.
-  // We sort in Dart below instead.
-  q = q.where(_periodKeyField, isEqualTo: _periodKey).limit(100);
-} else {
-  q = q.orderBy(_field, descending: true).limit(50);
-}
-return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-  stream: q.snapshots(),
-  builder: (context, snap) {
-    if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-    var all = snap.data!.docs
-        .map((d) => _RE.fromMap(d.data(), d.id))
-        .where((e) => e.score(_filter) > 0)
-        .toList();
-    // Sort in Dart instead of Firestore to avoid composite index requirement
-    all.sort((a, b) => b.score(_filter).compareTo(a.score(_filter)));
-    if (all.length > 50) all = all.sublist(0, 50);
+    if (_periodKey != null) {
+      q = q.where(_periodKeyField, isEqualTo: _periodKey).limit(100);
+    } else {
+      q = q.orderBy(_field, descending: true).limit(50);
+    }
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: q.snapshots(),
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xffbf70ff)));
-        var all = snap.data!.docs.map((d) => _RE.fromMap(d.data(), d.id)).where((e) => e.score(_filter) > 0).toList();
+        var all = snap.data!.docs
+            .map((d) => _RE.fromMap(d.data(), d.id))
+            .where((e) => e.score(_filter) > 0)
+            .toList();
         all.sort((a, b) => b.score(_filter).compareTo(a.score(_filter)));
+        if (all.length > 50) all = all.sublist(0, 50);
         final me = FirebaseAuth.instance.currentUser;
         final myIdx = me != null ? all.indexWhere((e) => e.uid == me.uid) : -1;
         final myRank = myIdx == -1 ? null : myIdx + 1;
@@ -286,8 +279,7 @@ return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         ]);
       },
     );
-  }
-
+    }
   // ── Couple body ────────────────────────────────────────────────────────────
 
   Widget _coupleBody() {
