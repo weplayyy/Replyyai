@@ -1440,7 +1440,7 @@ class _CountdownBannerState extends State<_CountdownBanner> {
   }
 }
 
-class _FrozenBanner extends StatelessWidget {
+  class _FrozenBanner extends StatelessWidget {
   final VoidCallback onUnfreeze;
   const _FrozenBanner({required this.onUnfreeze});
 
