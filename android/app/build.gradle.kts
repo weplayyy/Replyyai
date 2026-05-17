@@ -1,13 +1,3 @@
-import java.util.Properties
-import java.io.FileInputStream
-
-val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("key.properties")
-
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-}
-
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -37,29 +27,11 @@ android {
         versionName = flutter.versionName
     }
 
-    signingConfigs {
-        create("release") {
-            if (keystoreProperties.getProperty("storeFile") != null) {
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
-                storePassword = keystoreProperties.getProperty("storePassword")
-            }
-        }
-    }
-
     buildTypes {
         release {
 
-            // Use release keystore if available
-            if (keystoreProperties.getProperty("storeFile") != null) {
-                signingConfig = signingConfigs.getByName("release")
-            }
-
-            // Fallback to debug signing for GitHub Actions
-            else {
-                signingConfig = signingConfigs.getByName("debug")
-            }
+            // Temporary debug signing for GitHub Actions
+            signingConfig = signingConfigs.getByName("debug")
 
             isMinifyEnabled = false
             isShrinkResources = false
